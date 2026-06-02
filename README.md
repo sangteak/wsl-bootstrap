@@ -36,6 +36,19 @@ wsl --shutdown
 
 후 WSL을 다시 열어야 적용됩니다.
 
+## 터미널 폰트 (Nerd Font) — Windows 쪽 1회 설정
+
+Powerlevel10k 프롬프트의 아이콘(화살표·git 상태 등)은 Nerd Font가 있어야
+정상 표시됩니다. 폰트는 WSL이 아니라 **Windows 터미널이 렌더링**하므로,
+반드시 Windows 쪽에 설치해야 합니다.
+
+1. Nerd Font 다운로드 — 예: [Hack Nerd Font](https://github.com/ryanoasis/nerd-fonts/releases/latest)
+   (p10k 공식 권장은 MesloLGS NF. 아무 Nerd Font나 동작)
+2. 압축 해제 후 `.ttf` 전체 선택 → 우클릭 → **모든 사용자용으로 설치**
+3. 터미널(Windows Terminal / VS Code 등) 설정에서 폰트를 해당 Nerd Font로 변경
+
+> 설치하지 않으면 아이콘이 네모(□)·물음표로 깨져 보입니다. zsh 기능 자체는 정상입니다.
+
 ## 머신 종속 설정
 
 IP 등 머신마다 다른 값은 `~/.zshrc.local`에 둡니다(저장소 커밋 금지):
