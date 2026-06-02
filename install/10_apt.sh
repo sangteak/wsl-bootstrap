@@ -10,10 +10,11 @@ ensure_apt \
     zsh \
     git curl wget unzip \
     eza bat fd-find jq \
-    build-essential \
+    build-essential make \
     nodejs npm \
     universal-ctags
 
 # Ubuntu에서 bat 바이너리는 batcat 이름으로 설치됨 → .zshrc alias(cat=batcat)와 일치
 # nodejs/npm: nvim coc.nvim 의존, universal-ctags: nvim tagbar 의존, build-essential: treesitter :TSUpdate 의존
+# make: 이 저장소의 핵심 도구 mk(Makefile)의 직접 의존성 — build-essential에 포함되나 명시
 log "10_apt: 완료"

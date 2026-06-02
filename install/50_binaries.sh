@@ -37,6 +37,25 @@ else
     curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 fi
 
+# ── aws cli v2 (공식 zip 인스톨러, /usr/local/bin/aws) ─
+if have aws; then
+    log "aws: 이미 설치됨($(aws --version 2>&1 | awk '{print $1}')) — skip"
+else
+    log "aws: 설치(aws cli v2)"
+    curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "$TMP/awscliv2.zip"
+    unzip -q "$TMP/awscliv2.zip" -d "$TMP"
+    sudo "$TMP/aws/install"
+fi
+
+# ── minikube (최신, /usr/local/bin) ────────────────────
+if have minikube; then
+    log "minikube: 이미 설치됨 — skip"
+else
+    log "minikube: 설치(latest)"
+    curl -fsSL "https://storage.googleapis.com/minikube/releases/latest/minikube-linux-${ARCH}" -o "$TMP/minikube"
+    sudo install -m 0755 "$TMP/minikube" /usr/local/bin/minikube
+fi
+
 # ── neovim (최신 release tarball, /opt + 심링크) ───────
 if have nvim; then
     log "nvim: 이미 설치됨($(nvim --version | head -1)) — skip"
