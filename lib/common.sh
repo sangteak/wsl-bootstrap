@@ -60,7 +60,7 @@ link_with_backup() {
     fi
     if [ -e "$dst" ] || [ -L "$dst" ]; then
         mkdir -p "$backup"
-        local stamp; stamp="$(date +%Y%m%d%H%M%S)"
+        local stamp; stamp="$(date +%Y%m%d%H%M%S%N)"
         mv "$dst" "$backup/$(basename "$dst").$stamp"
         warn "기존 파일 백업: $dst → $backup/$(basename "$dst").$stamp"
     fi
