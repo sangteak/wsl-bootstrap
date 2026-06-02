@@ -54,7 +54,9 @@ log "── 검증 ──"
 # (이 export는 검증 한정 — 실제 PATH는 .zshrc가 셸 시작 시 설정)
 export PATH="/usr/local/go/bin:$HOME/.fzf/bin:$HOME/.local/bin:$PATH"
 fail=0
-if zsh -ic 'exit' >/dev/null 2>&1; then log "✅ zsh 대화형 로드 OK"; else warn "❌ zsh 로드 실패"; fail=1; fi
+# 대화형 zsh가 .zshrc를 끝까지 로드하고 명령을 실행하는지 '양성 마커'로 검증.
+# (zsh -ic 'exit' 종료코드는 비-TTY 환경에서 p10k gitstatus 초기화 실패에 오염되어 거짓 음성을 냄)
+if zsh -ic 'print -rn -- PEACH_OK' 2>/dev/null | grep -q PEACH_OK; then log "✅ zsh 대화형 로드 OK"; else warn "❌ zsh 로드 실패"; fail=1; fi
 for t in zsh git eza batcat nvim kubectl helm go fzf aws minikube make docker eksctl; do
     if command -v "$t" >/dev/null 2>&1; then log "✅ $t"; else warn "❌ $t 없음"; fail=1; fi
 done
