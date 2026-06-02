@@ -1,3 +1,6 @@
 *.bak
 *.bak.*
 .peach-backup/
+
+# Claude Code 로컬 캐시
+.claude/statusline-*.json
