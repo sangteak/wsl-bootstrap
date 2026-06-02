@@ -12,7 +12,7 @@ AWS_PROFILE ?= default
 AWS_REGION  ?= ap-northeast-2
 EKS_CLUSTER ?= CHANGE_ME
 
-.PHONY: help ctx-eks ctx-local aws-clusters change-shell
+.PHONY: help ctx-eks ctx-local aws-tools aws-whoami aws-can aws-clusters change-shell
 
 help: ## 이 명령 목록 출력
 	@awk 'BEGIN{FS=":.*##"} /^##@/{printf "\n\033[1m%s\033[0m\n", substr($$0,5); next} /^[a-zA-Z0-9_-]+:.*##/{printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -31,7 +31,36 @@ ctx-local: ## minikube(로컬)로 전환
 	kubectl config use-context minikube
 	kubectl config get-contexts
 
-##@ (정리 예정) — 그룹 미확정
+##@ aws — AWS/EKS 권한·환경 점검 (mk aws <명령>)
+aws-tools: ## 필수 도구 버전 확인(aws/eksctl/kubectl)
+	aws --version
+	eksctl version
+	kubectl version --client
+
+aws-whoami: ## 현재 AWS 신원(Arn) 확인
+	aws sts get-caller-identity --query Arn --output text --profile $(AWS_PROFILE)
+
+aws-can: ## EKS 생성 액션 허용 여부 시뮬레이션 (mk aws can [PRINCIPAL_ARN])
+	@PRINCIPAL="$(ARGS)"
+	if [ -z "$$PRINCIPAL" ]; then
+	  PRINCIPAL="$$(aws sts get-caller-identity --query Arn --output text --profile $(AWS_PROFILE))"
+	fi
+	# 역할 기반 인증(SSO/AssumeRole)의 STS ARN을 simulate-principal-policy가 받는 IAM role ARN으로 정규화.
+	# (IAM 사용자 ARN(user/...)은 패턴이 안 맞아 그대로 통과 → 부작용 없음)
+	PRINCIPAL="$$(printf '%s' "$$PRINCIPAL" | sed 's#:sts:#:iam:#; s#assumed-role/\([^/]*\)/.*#role/\1#')"
+	echo "PRINCIPAL=$$PRINCIPAL" >&2
+	aws iam simulate-principal-policy \
+	  --policy-source-arn "$$PRINCIPAL" \
+	  --action-names \
+	    eks:CreateCluster eks:CreateNodegroup eks:DescribeCluster \
+	    ec2:CreateVpc ec2:CreateSubnet ec2:CreateSecurityGroup ec2:RunInstances \
+	    iam:CreateRole iam:AttachRolePolicy iam:CreateServiceLinkedRole iam:PassRole \
+	    cloudformation:CreateStack cloudformation:DescribeStacks \
+	    autoscaling:CreateAutoScalingGroup \
+	  --query 'EvaluationResults[].{action:EvalActionName,decision:EvalDecision}' \
+	  --output table \
+	  --profile $(AWS_PROFILE)
+
 aws-clusters: ## AWS EKS 클러스터 목록 조회
 	aws eks list-clusters --region $(AWS_REGION) --profile $(AWS_PROFILE)
 
