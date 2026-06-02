@@ -1,0 +1,6 @@
+# 머신/환경 종속 설정 템플릿.
+# 복사: cp ~/.peach/dotfiles/zshrc.local.example ~/.zshrc.local
+# 이 파일(.example)만 저장소에 커밋한다. ~/.zshrc.local 은 커밋 금지.
+
+# Docker 데몬(Windows측 dockerd)이 WSL2 NIC IP:2375 로 열려 있을 때
+export DOCKER_HOST="tcp://$(hostname -I | awk '{print $1}'):2375"
