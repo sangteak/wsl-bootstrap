@@ -32,7 +32,7 @@ source "$PEACH_DIR/lib/common.sh"
 # ── 3. install 모듈 순차 실행 (멱등) ───────────────────
 for mod in "$PEACH_DIR"/install/[0-9]*.sh; do
     log "── 실행: $(basename "$mod") ──"
-    bash "$mod"
+    bash "$mod" || die "모듈 실패: $(basename "$mod") — 원인 확인 후 setup.sh 재실행(멱등)"
 done
 
 # ── 4. 기본 셸 zsh 전환 (chsh → 실패 시 bashrc 폴백) ──
@@ -50,6 +50,9 @@ fi
 
 # ── 5. 검증 ────────────────────────────────────────────
 log "── 검증 ──"
+# 검증은 setup의 bash 프로세스에서 실행되므로, zshrc에만 있는 PATH(go/fzf 등)를 보강한다.
+# (이 export는 검증 한정 — 실제 PATH는 .zshrc가 셸 시작 시 설정)
+export PATH="/usr/local/go/bin:$HOME/.fzf/bin:$HOME/.local/bin:$PATH"
 fail=0
 if zsh -ic 'exit' >/dev/null 2>&1; then log "✅ zsh 대화형 로드 OK"; else warn "❌ zsh 로드 실패"; fail=1; fi
 for t in zsh git eza batcat nvim kubectl helm go fzf; do
