@@ -33,7 +33,7 @@ affects:
 - GOAL-005: 재현 결과가 현재 동작 환경과 동등함을 검증 단계로 보장.
 - NON-001: `wsl --export/--import` 이미지 복원 방식 미채택(블랙박스 회피).
 - NON-002: 기존 k8s/agones/openmatch **배포** 스크립트(`98_Scripts/.../setup/*.sh`) 재작성/이관 범위 밖.
-- NON-003: Docker 데몬(Windows측 dockerd) 구동 자체 범위 밖.
+- NON-003: ~~Docker 데몬(Windows측 dockerd) 구동 자체 범위 밖~~ → **2026-06-02 범위 편입**: WSL 내부 systemd 네이티브 docker-ce 설치로 전환(REQ-013). 구 Windows측 dockerd-over-TCP 우회 폐기.
 
 ## 정책 / 확정 요구사항
 
@@ -49,6 +49,7 @@ affects:
 - REQ-010: 기존 스크립트 선별 이관 + shebang 정상화.
 - REQ-011: 진입점 self-clone — `setup.sh`가 git/curl 확보 → `~/.peach` clone/pull → exec → `install/*`. 원격 `curl | bash` 부트스트랩.
 - REQ-012: nvim 생태계 재현 — `config/nvim/init.vim` 배포(중첩경로), vim-plug 부트스트랩 + headless PlugInstall(플러그인 11개), apt 의존성(nodejs/npm/universal-ctags/build-essential).
+- REQ-013: 클라우드/k8s 도구 설치 — 바이너리(`50_binaries.sh`): kubectl·helm·aws cli v2·minikube·eksctl. docker는 별도 모듈 `60_docker.sh`로 **WSL 내부 systemd 네이티브** 설치(apt 공식저장소 docker-ce + `usermod -aG docker` + `systemctl enable --now docker`, 유닉스 소켓 로컬 전용). 구 `dockerd-over-TCP-2375 + Windows 배치/Task Scheduler` 우회는 systemd(REQ-008) 도입으로 폐기. systemd 미활성(클린 머신 최초 실행) 시 `wsl --shutdown` 후 재실행 안내 가드. `make`는 `10_apt`에 명시(mk의 직접 의존성).
 
 ## 아키텍처
 
@@ -60,7 +61,7 @@ WSLConfigure/                  (= ~/.peach 로 clone됨)
 ├── config/nvim/init.vim       # → ~/.config/nvim/init.vim (중첩 경로)
 ├── install/                   # 멱등 설치 모듈 (각자 lib/common.sh source, 번호순 실행)
 │   ├── 10_apt.sh  20_ohmyzsh.sh  30_p10k.sh  40_plugins.sh
-│   ├── 50_binaries.sh  70_link.sh  80_nvim.sh  90_wsl_conf.sh
+│   ├── 50_binaries.sh  60_docker.sh  70_link.sh  80_nvim.sh  90_wsl_conf.sh
 ├── Makefile                   # ops 명령 카탈로그 (group-verb 타깃, mk <그룹> <명령> 으로 호출, 식별자는 ?= 변수)
 ├── peach.local.mk.example     # → ~/.peach.local.mk (머신 로컬 식별자, 커밋 금지)
 ├── versions.env               # 빈 seam (핀 로직 v2)
@@ -85,10 +86,11 @@ WSLConfigure/                  (= ~/.peach 로 clone됨)
 |----------|------|------|
 | setup.sh | install/*, lib/common.sh | ~, /etc/wsl.conf, ~/.local/bin |
 | 30_p10k / 40_plugins | git, oh-my-zsh | .zshrc 테마/플러그인 |
-| 50_binaries | curl, tar | go/nvim/kubectl/helm |
+| 50_binaries | curl, tar | go/nvim/kubectl/helm/aws/minikube/eksctl |
+| 60_docker | apt(docker repo), systemd | docker-ce 엔진, docker 그룹, /var/run/docker.sock |
 | 70_link | dotfiles/, config/ | ~/.zshrc 등, ~/.config/nvim |
 | mk(zsh 함수) | Makefile, ~/.peach.local.mk | ops 명령 실행(식별자 주입) |
-| .zshrc | ~/.zshrc.local | DOCKER_HOST 등 런타임 |
+| .zshrc | ~/.zshrc.local | 머신 종속 런타임(docker는 systemd 유닉스 소켓 — env 불필요) |
 
 ## 주요 기술 결정
 
@@ -103,6 +105,7 @@ WSLConfigure/                  (= ~/.peach 로 clone됨)
 | 어디서나 호출 | zsh 함수 `mk`(= `make -C ~/.peach`) | `make` 미오염, 인자/완성 처리 | `alias make=`(전역 오염) / 래퍼 스크립트 |
 | 부트스트랩 | setup.sh 흡수(self-clone) | 부트스트랩 역설 해소 | `00_bootstrap.sh` 모듈(레이어 오류) |
 | 멱등 메커니즘 | `lib/common.sh` 공통화 | 멱등 계약 통일 | 모듈별 개별 구현(불일치 버그) |
+| docker 구동 | WSL 내부 네이티브 docker-ce + systemd | 저장소로 자동화 가능·라이선스 free·유닉스 소켓(무노출) | Docker Desktop(Windows측·자동화 불가·라이선스) / dockerd-over-TCP-2375(무인증 노출·배치/스케줄러 의존) |
 
 ## 제약조건 / 가정
 - 대상 = WSL2 + Ubuntu 24.04(apt), sudo 권한, systemd=true.
@@ -137,7 +140,7 @@ WSLConfigure/                  (= ~/.peach 로 clone됨)
 - ⚠️ **미수행**: install 모듈의 시스템 변경(apt/sudo/바이너리)은 본 환경에서 e2e 실행 안 함. **진짜 통합 검증 = 깨끗한 WSL에서 `setup.sh` 1회 실행.**
 
 ### 알려진 한계 (후속 후보)
-- `50_binaries.sh` nvim 자산명 `x86_64` 하드코딩(amd64 가정, ARM64 미지원).
+- amd64 가정: `50_binaries.sh`(nvim `x86_64`, aws/minikube/eksctl `ARCH=amd64`) 및 docker repo `dpkg --print-architecture` 외 자산 하드코딩 — ARM64 미지원.
 - 버전 핀(versions.env 비교/skip)은 v2 보류.
 - ops 명령 중 프로젝트 종속분(docker 빌드, parca/pprof 셋업)은 Makefile 통합에서 제외 — 특정 프로젝트 체크아웃 전용이라 WSL 환경 ops와 성격이 다름.
 
@@ -151,3 +154,5 @@ WSLConfigure/                  (= ~/.peach 로 clone됨)
 | 2026-06-02 | 보안 정리: `dotfiles/gitconfig`의 회사 이메일·식별자 제거 → `[include] ~/.gitconfig.local` 패턴 + `gitconfig.local.example` 추가 (공개 저장소 PII 노출 차단, git 히스토리 재작성 동반) | complete |
 | 2026-06-02 | ops 스크립트 15개 → `Makefile` 통합(ops 12개) + zsh `mk` 함수. 환경 식별자(AWS 프로파일/클러스터/도커 NS 등)를 `~/.peach.local.mk`로 분리(PII 제거). 프로젝트 종속 3개(docker_install·parca-setup·test-pod-setup) 제외·삭제. `scripts/` 폐지, 70_link 심링크 블록 제거, zshrc 죽은 PATH 정리. git 히스토리 재작성 동반 | complete |
 | 2026-06-02 | ops 명령 정리·재구성: 미사용 8개(webhook/agones/mm101 등 테스트용) 삭제 → 4개로 축소, 고아 변수(DOCKER_NS/MM_NS/WEBHOOK/AGONES_DIR) 제거. `mk`를 `mk <그룹> <명령> [옵션...]` 서브커맨드 디스패처로 재설계(group-verb 타깃 + `##@` 그룹 help + 2단계 자동완성 + `ARGS` 옵션 주입). `ctx` 그룹 확정(`switch-aws`→`ctx-eks`, `switch-local`→`ctx-local`). `aws-clusters`·`change-shell`은 그룹 미확정(추후 정리) | complete |
+| 2026-06-02 | `ctx-eks`에 `EKS_CLUSTER` 미설정 가드 추가(가짜 기본값 `CHANGE_ME`가 Makefile 직접 수정을 유도하던 affordance 제거 → 미설정 시 실행 차단 + `~/.peach.local.mk` 안내). `AWS_REGION`/`AWS_PROFILE`은 동작하는 기본값이라 유지 | complete |
+| 2026-06-02 | 클라우드/k8s 설치 도구 확장(REQ-013): `50_binaries`에 aws cli v2·minikube·eksctl 추가, `10_apt`에 `make` 명시. **docker 신규 모듈 `60_docker.sh`** — WSL 내부 systemd 네이티브 docker-ce(apt 공식저장소 + docker 그룹 + `systemctl enable --now`). 구 dockerd-over-TCP-2375 + Windows 배치/Task Scheduler 우회 폐기(NON-003 범위 편입, 무인증 노출 제거). zshrc 죽은 docker placeholder 정리. ⚠️ 클린 WSL e2e 미검증(정적 shellcheck·URL 200만 확인) | complete |
