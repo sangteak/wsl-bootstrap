@@ -1,11 +1,11 @@
-# wsl_configure (peach 🍑)
+# wsl-bootstrap (peach 🍑)
 
 깨끗한 WSL(Ubuntu 24.04, WSL2)에서 zsh 셸 환경과 스크립트를 한 번에 재현하는 프로비저닝 저장소.
 
 ## 빠른 시작 (깨끗한 WSL)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sangteak/wsl_configure/main/setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/sangteak/wsl-bootstrap/main/setup.sh | bash
 ```
 
 `setup.sh`가 git/curl을 설치하고 저장소를 `~/.peach`로 clone한 뒤, 설치 모듈을 멱등하게 실행합니다.
@@ -14,7 +14,7 @@ curl -fsSL https://raw.githubusercontent.com/sangteak/wsl_configure/main/setup.s
 
 ```bash
 sudo apt update && sudo apt install -y git curl
-git clone https://github.com/sangteak/wsl_configure.git ~/.peach
+git clone https://github.com/sangteak/wsl-bootstrap.git ~/.peach
 bash ~/.peach/setup.sh
 ```
 

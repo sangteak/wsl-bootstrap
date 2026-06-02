@@ -14,7 +14,7 @@ affects:
 
 # wsl-environment 도메인
 
-> WSL 셸 환경의 재현·관리를 담당하는 도메인. 단일 진실 소스 = GitHub `sangteak/wsl_configure` (clone 위치 `~/.peach`).
+> WSL 셸 환경의 재현·관리를 담당하는 도메인. 단일 진실 소스 = GitHub `sangteak/wsl-bootstrap` (clone 위치 `~/.peach`).
 
 ## 시스템 개요
 
@@ -104,7 +104,7 @@ WSLConfigure/                  (= ~/.peach 로 clone됨)
 
 ## 제약조건 / 가정
 - 대상 = WSL2 + Ubuntu 24.04(apt), sudo 권한, systemd=true.
-- 단일 진실 소스 = GitHub `sangteak/wsl_configure`.
+- 단일 진실 소스 = GitHub `sangteak/wsl-bootstrap`.
 - git/curl은 setup 부트스트랩에서 확보.
 - `wsl --shutdown`은 Windows에서 1회 수동(WSL 내부 재시작 불가).
 

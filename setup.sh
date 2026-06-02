@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PEACH_DIR="$HOME/.peach"
-REPO_URL="https://github.com/sangteak/wsl_configure.git"
+REPO_URL="https://github.com/sangteak/wsl-bootstrap.git"
 
 # ── 1. git/curl 확보 (부트스트랩) ─────────────────────
 if ! command -v git >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then
