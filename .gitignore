@@ -2,5 +2,8 @@
 *.bak.*
 .peach-backup/
 
+# 머신 종속 make 변수(커밋 금지). *.mk.example 은 추적됨
+*.local.mk
+
 # Claude Code 로컬 캐시
 .claude/statusline-*.json

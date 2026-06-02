@@ -26,14 +26,8 @@ if [ -d "$REPO_DIR/config" ]; then
     done < <(find "$REPO_DIR/config" -type f -print0)
 fi
 
-# ── scripts/*.sh → ~/.local/bin/<name> (.sh 제거) ──────
+# ── ops 명령은 ~/.peach/Makefile + zsh 'mk' 함수로 제공 (개별 심링크 폐지) ──
+# (이전엔 scripts/*.sh 를 ~/.local/bin 에 심링크했으나 Makefile 통합으로 대체됨)
 mkdir -p "$HOME/.local/bin"
-shopt -s nullglob
-for f in "$REPO_DIR"/scripts/*.sh; do
-    chmod +x "$f"
-    name="$(basename "$f" .sh)"
-    link_with_backup "$f" "$HOME/.local/bin/$name"
-done
-shopt -u nullglob
 
 log "70_link: 완료"

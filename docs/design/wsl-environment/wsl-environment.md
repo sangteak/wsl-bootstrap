@@ -7,7 +7,7 @@ features:
   - provisioning (개발 완료 2026-06-02)
 affects:
   - "~/.zshrc, ~/.p10k.zsh 및 기타 dotfiles"
-  - "~/.local/bin (스크립트 명령 배포 경로)"
+  - "ops 명령 = ~/.peach/Makefile + zsh 'mk' 함수 (식별자는 ~/.peach.local.mk)"
   - "~/.peach (저장소 clone 위치)"
   - "/etc/wsl.conf"
 ---
@@ -39,7 +39,7 @@ affects:
 
 - REQ-001: 저장소를 `~/.peach`(ext4)로 clone 후 홈으로 심링크.
 - REQ-002: dotfiles 심링크(`ln -sfn`), 기존 파일은 `~/.peach-backup/`로 대피.
-- REQ-003: 스크립트 명령화 — `scripts/<name>.sh` → `~/.local/bin/<name>`(.sh 제거). 분류는 flat 시작.
+- REQ-003: ops 명령은 `~/.peach/Makefile`에 `.PHONY` 타깃으로 통합하고, zsh 함수 `mk`(= `make -C ~/.peach`)로 어디서나 호출. 환경 식별자는 `~/.peach.local.mk`(머신 로컬)에서 주입, 저장소엔 `peach.local.mk.example`만. (구 방식 `scripts/*.sh` → `~/.local/bin` 심링크는 폐지 — 2026-06-02 Makefile 통합으로 대체.)
 - REQ-004: 멱등 설치 모듈 `install/*.sh`, 공통 헬퍼는 `lib/common.sh`로 통일.
 - REQ-005: 최신 설치 기본. `versions.env`는 빈 seam(핀 로직 v2 보류, YAGNI).
 - REQ-006: 머신 종속값·식별자는 머신 로컬 분리, 저장소엔 `.example`만. (셸: `~/.zshrc.local` ← `zshrc.local.example`. git 사용자 식별자 `user.name`/`user.email`: `~/.gitconfig.local` ← `gitconfig.local.example`, `gitconfig`는 `[include]`로 로드.)
@@ -56,12 +56,13 @@ affects:
 ```
 WSLConfigure/                  (= ~/.peach 로 clone됨)
 ├── lib/common.sh              # 공통 멱등 헬퍼: log/warn/die, have, ensure_apt, clone_or_pull, link_with_backup
-├── dotfiles/                  # 홈 직속 설정 원본 (zshrc, p10k.zsh, gitconfig, zshrc.local.example)
+├── dotfiles/                  # 홈 직속 설정 원본 (zshrc[mk 함수 포함], p10k.zsh, gitconfig, *.local.example)
 ├── config/nvim/init.vim       # → ~/.config/nvim/init.vim (중첩 경로)
 ├── install/                   # 멱등 설치 모듈 (각자 lib/common.sh source, 번호순 실행)
 │   ├── 10_apt.sh  20_ohmyzsh.sh  30_p10k.sh  40_plugins.sh
 │   ├── 50_binaries.sh  70_link.sh  80_nvim.sh  90_wsl_conf.sh
-├── scripts/                   # ~/.local/bin 으로 배포될 운영 명령 (flat)
+├── Makefile                   # ops 명령 카탈로그 (mk <target> 으로 호출, 식별자는 ?= 변수)
+├── peach.local.mk.example     # → ~/.peach.local.mk (머신 로컬 식별자, 커밋 금지)
 ├── versions.env               # 빈 seam (핀 로직 v2)
 ├── setup.sh                   # 진입점 (self-clone aware)
 └── README.md
@@ -85,7 +86,8 @@ WSLConfigure/                  (= ~/.peach 로 clone됨)
 | setup.sh | install/*, lib/common.sh | ~, /etc/wsl.conf, ~/.local/bin |
 | 30_p10k / 40_plugins | git, oh-my-zsh | .zshrc 테마/플러그인 |
 | 50_binaries | curl, tar | go/nvim/kubectl/helm |
-| 70_link | dotfiles/, config/, scripts/ | ~/.zshrc 등, ~/.config/nvim, ~/.local/bin |
+| 70_link | dotfiles/, config/ | ~/.zshrc 등, ~/.config/nvim |
+| mk(zsh 함수) | Makefile, ~/.peach.local.mk | ops 명령 실행(식별자 주입) |
 | .zshrc | ~/.zshrc.local | DOCKER_HOST 등 런타임 |
 
 ## 주요 기술 결정
@@ -95,10 +97,10 @@ WSLConfigure/                  (= ~/.peach 로 clone됨)
 | 재현 방식 | (A) 실제 프로비저닝 | 투명·이식성 | (B) export/import 이미지(블랙박스) |
 | 배포 위치 | `~/.peach`(ext4) | 셸 속도·실행비트·CRLF·이식성 | `/mnt/d` 직접(9p 오버헤드/깨짐) |
 | dotfiles 연결 | 심링크 | 단일 원본, git 추적 | 복사(이중 관리) |
-| 스크립트 관리 | 선별 이관 + flat | 목적 명료, 과분류 회피 | 전부 이관 / env·ops 선분류 |
+| ops 명령 관리 | Makefile 통합 + `mk` 함수 | 단일 카탈로그·표준 도구·발견성(`mk`=help) | 개별 `.sh` 심링크(흩어짐) / Justfile(설치 부담) |
 | 버전 | 최신만(핀 보류) | 검증 단계가 안전망(YAGNI) | 전면 핀 / 비교 기계장치 |
-| 머신 종속값 | `~/.zshrc.local` 분리 | 이식성 | 저장소 포함(새 머신 깨짐) |
-| 명령화 | `.sh` 제거 심링크 | UX(`switch_aws`) | alias / .sh 노출 |
+| 머신 종속값 | `~/.zshrc.local`·`~/.gitconfig.local`·`~/.peach.local.mk` 분리 | 이식성·PII 비노출 | 저장소 포함(새 머신 깨짐/PII 유출) |
+| 어디서나 호출 | zsh 함수 `mk`(= `make -C ~/.peach`) | `make` 미오염, 인자/완성 처리 | `alias make=`(전역 오염) / 래퍼 스크립트 |
 | 부트스트랩 | setup.sh 흡수(self-clone) | 부트스트랩 역설 해소 | `00_bootstrap.sh` 모듈(레이어 오류) |
 | 멱등 메커니즘 | `lib/common.sh` 공통화 | 멱등 계약 통일 | 모듈별 개별 구현(불일치 버그) |
 
@@ -136,8 +138,10 @@ WSLConfigure/                  (= ~/.peach 로 clone됨)
 
 ### 알려진 한계 (후속 후보)
 - `50_binaries.sh` nvim 자산명 `x86_64` 하드코딩(amd64 가정, ARM64 미지원).
-- `dotfiles/zshrc`가 여전히 `~/98_Scripts/...`를 PATH에 추가 → 깨끗한 머신에선 죽은 설정(정리 후보).
 - 버전 핀(versions.env 비교/skip)은 v2 보류.
+- ops 명령 중 프로젝트 종속분(docker 빌드, parca/pprof 셋업)은 Makefile 통합에서 제외 — 특정 프로젝트 체크아웃 전용이라 WSL 환경 ops와 성격이 다름.
+
+> 해소됨: `dotfiles/zshrc`의 죽은 `~/98_Scripts/...` PATH는 2026-06-02 제거(Makefile 통합 시).
 
 ## 변경 이력
 | 날짜 | 변경 내용 | 상태 |
@@ -145,3 +149,4 @@ WSLConfigure/                  (= ~/.peach 로 clone됨)
 | 2026-06-01 | provisioning 브레인스토밍(국면 1~4) + PLAN | ready-for-plan |
 | 2026-06-02 | provisioning 개발 완료 → wsl-environment 도메인으로 승격·통합 | complete |
 | 2026-06-02 | 보안 정리: `dotfiles/gitconfig`의 회사 이메일·식별자 제거 → `[include] ~/.gitconfig.local` 패턴 + `gitconfig.local.example` 추가 (공개 저장소 PII 노출 차단, git 히스토리 재작성 동반) | complete |
+| 2026-06-02 | ops 스크립트 15개 → `Makefile` 통합(ops 12개) + zsh `mk` 함수. 환경 식별자(AWS 프로파일/클러스터/도커 NS 등)를 `~/.peach.local.mk`로 분리(PII 제거). 프로젝트 종속 3개(docker_install·parca-setup·test-pod-setup) 제외·삭제. `scripts/` 폐지, 70_link 심링크 블록 제거, zshrc 죽은 PATH 정리. git 히스토리 재작성 동반 | complete |

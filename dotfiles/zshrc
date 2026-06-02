@@ -120,7 +120,7 @@ source $ZSH/oh-my-zsh.sh
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 # PATH 설정
-export PATH=$HOME/98_Scripts/01_ShellScripts/cmd:$HOME/98_Scripts/01_ShellScripts/setup:/usr/local/go/bin:$PATH
+export PATH=/usr/local/go/bin:$PATH
 
 # eza aliases
 alias ls='eza -l'
@@ -154,6 +154,12 @@ kexec() {
 klog() {
     kubectl logs pod/"$1" -n "$2"
 }
+
+# peach: ~/.peach/Makefile 의 ops 명령을 어디서나 'mk <명령>' 으로 실행 (인자 없으면 목록)
+mk() { make -C "$HOME/.peach" "$@"; }
+_mk() { compadd ${(f)"$(awk -F'[: ]' '/^[a-zA-Z0-9_-]+:.*##/{print $1}' "$HOME/.peach/Makefile" 2>/dev/null)"} }
+compdef _mk mk
+
 source ~/powerlevel10k/powerlevel10k.zsh-theme
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
