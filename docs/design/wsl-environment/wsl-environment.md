@@ -42,7 +42,7 @@ affects:
 - REQ-003: 스크립트 명령화 — `scripts/<name>.sh` → `~/.local/bin/<name>`(.sh 제거). 분류는 flat 시작.
 - REQ-004: 멱등 설치 모듈 `install/*.sh`, 공통 헬퍼는 `lib/common.sh`로 통일.
 - REQ-005: 최신 설치 기본. `versions.env`는 빈 seam(핀 로직 v2 보류, YAGNI).
-- REQ-006: 머신 종속값은 `~/.zshrc.local` 분리, 저장소엔 `zshrc.local.example`.
+- REQ-006: 머신 종속값·식별자는 머신 로컬 분리, 저장소엔 `.example`만. (셸: `~/.zshrc.local` ← `zshrc.local.example`. git 사용자 식별자 `user.name`/`user.email`: `~/.gitconfig.local` ← `gitconfig.local.example`, `gitconfig`는 `[include]`로 로드.)
 - REQ-007: 기본 셸 전환 — `chsh -s zsh` 시도 → 실패 시 `~/.bashrc`에 `exec zsh` 폴백.
 - REQ-008: `/etc/wsl.conf` 멱등 생성(systemd=true, default user) + `wsl --shutdown` 안내.
 - REQ-009: 설치 후 검증(zsh 로드·도구 `--version`·p10k 로드).
@@ -144,3 +144,4 @@ WSLConfigure/                  (= ~/.peach 로 clone됨)
 |------|-----------|------|
 | 2026-06-01 | provisioning 브레인스토밍(국면 1~4) + PLAN | ready-for-plan |
 | 2026-06-02 | provisioning 개발 완료 → wsl-environment 도메인으로 승격·통합 | complete |
+| 2026-06-02 | 보안 정리: `dotfiles/gitconfig`의 회사 이메일·식별자 제거 → `[include] ~/.gitconfig.local` 패턴 + `gitconfig.local.example` 추가 (공개 저장소 PII 노출 차단, git 히스토리 재작성 동반) | complete |

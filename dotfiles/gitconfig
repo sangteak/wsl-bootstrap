@@ -1,3 +1,6 @@
-[user]
-	name = removed
-	email = removed@example.com
+# 머신 종속 식별자(user.name / user.email 등)는 저장소에 커밋하지 않는다.
+# 실제 값은 ~/.gitconfig.local 에 두고 아래 include 로 로드한다.
+#   cp ~/.peach/dotfiles/gitconfig.local.example ~/.gitconfig.local
+# (파일이 없으면 git 이 include 를 조용히 무시하므로 안전하다)
+[include]
+	path = ~/.gitconfig.local

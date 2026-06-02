@@ -44,6 +44,12 @@ IP 등 머신마다 다른 값은 `~/.zshrc.local`에 둡니다(저장소 커밋
 cp ~/.peach/dotfiles/zshrc.local.example ~/.zshrc.local
 ```
 
+git 사용자 식별자(`user.name`/`user.email`)도 머신 로컬로 분리합니다(저장소 커밋 금지):
+
+```bash
+cp ~/.peach/dotfiles/gitconfig.local.example ~/.gitconfig.local
+```
+
 ## 구조
 
 | 경로 | 역할 |
