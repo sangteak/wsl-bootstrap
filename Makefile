@@ -19,6 +19,12 @@ help: ## 이 명령 목록 출력
 
 ##@ ctx — kubectl 컨텍스트 전환 (mk ctx <대상>)
 ctx-eks: ## AWS EKS 클러스터로 전환(kubeconfig 갱신)
+	@if [ "$(EKS_CLUSTER)" = "CHANGE_ME" ]; then \
+	  echo "EKS_CLUSTER 가 설정되지 않았습니다." >&2; \
+	  echo "  ~/.peach.local.mk 에 'EKS_CLUSTER := <클러스터명>' 을 추가하세요" >&2; \
+	  echo "  (없으면: cp ~/.peach/peach.local.mk.example ~/.peach.local.mk)" >&2; \
+	  exit 1; \
+	fi
 	aws eks update-kubeconfig --region $(AWS_REGION) --name $(EKS_CLUSTER) --profile $(AWS_PROFILE)
 
 ctx-local: ## minikube(로컬)로 전환
