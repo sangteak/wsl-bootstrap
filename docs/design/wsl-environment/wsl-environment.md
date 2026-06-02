@@ -39,7 +39,7 @@ affects:
 
 - REQ-001: 저장소를 `~/.peach`(ext4)로 clone 후 홈으로 심링크.
 - REQ-002: dotfiles 심링크(`ln -sfn`), 기존 파일은 `~/.peach-backup/`로 대피.
-- REQ-003: ops 명령은 `~/.peach/Makefile`에 `.PHONY` 타깃으로 통합하고, zsh 함수 `mk`(= `make -C ~/.peach`)로 어디서나 호출. 환경 식별자는 `~/.peach.local.mk`(머신 로컬)에서 주입, 저장소엔 `peach.local.mk.example`만. (구 방식 `scripts/*.sh` → `~/.local/bin` 심링크는 폐지 — 2026-06-02 Makefile 통합으로 대체.)
+- REQ-003: ops 명령은 `~/.peach/Makefile`에 `그룹-명령`(group-verb) `.PHONY` 타깃으로 통합하고(`##@` 그룹 헤더로 분류·help 출력), zsh 함수 `mk`로 어디서나 `mk <그룹> <명령> [옵션...]` 형태로 호출. `mk`가 공백 입력을 실제 타깃 목록과 대조해 `make -C ~/.peach <그룹>-<명령> [ARGS=...]`로 디스패치하며, 그룹만 입력 시 하위 명령 안내·2단계 자동완성 제공. 환경 식별자는 `~/.peach.local.mk`(머신 로컬)에서 주입, 저장소엔 `peach.local.mk.example`만. (구 방식 `scripts/*.sh` → `~/.local/bin` 심링크는 폐지 — 2026-06-02 Makefile 통합으로 대체.)
 - REQ-004: 멱등 설치 모듈 `install/*.sh`, 공통 헬퍼는 `lib/common.sh`로 통일.
 - REQ-005: 최신 설치 기본. `versions.env`는 빈 seam(핀 로직 v2 보류, YAGNI).
 - REQ-006: 머신 종속값·식별자는 머신 로컬 분리, 저장소엔 `.example`만. (셸: `~/.zshrc.local` ← `zshrc.local.example`. git 사용자 식별자 `user.name`/`user.email`: `~/.gitconfig.local` ← `gitconfig.local.example`, `gitconfig`는 `[include]`로 로드.)
@@ -61,7 +61,7 @@ WSLConfigure/                  (= ~/.peach 로 clone됨)
 ├── install/                   # 멱등 설치 모듈 (각자 lib/common.sh source, 번호순 실행)
 │   ├── 10_apt.sh  20_ohmyzsh.sh  30_p10k.sh  40_plugins.sh
 │   ├── 50_binaries.sh  70_link.sh  80_nvim.sh  90_wsl_conf.sh
-├── Makefile                   # ops 명령 카탈로그 (mk <target> 으로 호출, 식별자는 ?= 변수)
+├── Makefile                   # ops 명령 카탈로그 (group-verb 타깃, mk <그룹> <명령> 으로 호출, 식별자는 ?= 변수)
 ├── peach.local.mk.example     # → ~/.peach.local.mk (머신 로컬 식별자, 커밋 금지)
 ├── versions.env               # 빈 seam (핀 로직 v2)
 ├── setup.sh                   # 진입점 (self-clone aware)
@@ -150,3 +150,4 @@ WSLConfigure/                  (= ~/.peach 로 clone됨)
 | 2026-06-02 | provisioning 개발 완료 → wsl-environment 도메인으로 승격·통합 | complete |
 | 2026-06-02 | 보안 정리: `dotfiles/gitconfig`의 회사 이메일·식별자 제거 → `[include] ~/.gitconfig.local` 패턴 + `gitconfig.local.example` 추가 (공개 저장소 PII 노출 차단, git 히스토리 재작성 동반) | complete |
 | 2026-06-02 | ops 스크립트 15개 → `Makefile` 통합(ops 12개) + zsh `mk` 함수. 환경 식별자(AWS 프로파일/클러스터/도커 NS 등)를 `~/.peach.local.mk`로 분리(PII 제거). 프로젝트 종속 3개(docker_install·parca-setup·test-pod-setup) 제외·삭제. `scripts/` 폐지, 70_link 심링크 블록 제거, zshrc 죽은 PATH 정리. git 히스토리 재작성 동반 | complete |
+| 2026-06-02 | ops 명령 정리·재구성: 미사용 8개(webhook/agones/mm101 등 테스트용) 삭제 → 4개로 축소, 고아 변수(DOCKER_NS/MM_NS/WEBHOOK/AGONES_DIR) 제거. `mk`를 `mk <그룹> <명령> [옵션...]` 서브커맨드 디스패처로 재설계(group-verb 타깃 + `##@` 그룹 help + 2단계 자동완성 + `ARGS` 옵션 주입). `ctx` 그룹 확정(`switch-aws`→`ctx-eks`, `switch-local`→`ctx-local`). `aws-clusters`·`change-shell`은 그룹 미확정(추후 정리) | complete |

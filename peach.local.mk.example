@@ -5,5 +5,3 @@
 AWS_PROFILE := your-aws-profile
 AWS_REGION  := ap-northeast-2
 EKS_CLUSTER := your-eks-cluster-name
-DOCKER_NS   := your-dockerhub-namespace
-AGONES_DIR  := $(HOME)/agones2

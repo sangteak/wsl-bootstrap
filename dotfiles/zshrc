@@ -155,9 +155,46 @@ klog() {
     kubectl logs pod/"$1" -n "$2"
 }
 
-# peach: ~/.peach/Makefile 의 ops 명령을 어디서나 'mk <명령>' 으로 실행 (인자 없으면 목록)
-mk() { make -C "$HOME/.peach" "$@"; }
-_mk() { compadd ${(f)"$(awk -F'[: ]' '/^[a-zA-Z0-9_-]+:.*##/{print $1}' "$HOME/.peach/Makefile" 2>/dev/null)"} }
+# peach: ~/.peach/Makefile 의 ops 명령을 어디서나 'mk <그룹> <명령> [옵션...]' 으로 실행.
+#   mk            → 전체 목록    mk ctx → 그룹 안내    mk ctx eks → 실행
+#   타깃명은 group-verb(예: ctx-eks). 래퍼가 공백 입력을 실제 타깃 목록과 대조해 디스패치.
+mk() {
+	local dir="$HOME/.peach"
+	local -a targets
+	targets=(${(f)"$(awk -F: '/^[a-zA-Z0-9_-]+:.*##/{print $1}' "$dir/Makefile" 2>/dev/null)"})
+	(( $# )) || { make -C "$dir"; return }
+	local target
+	if (( $# >= 2 )) && (( ${targets[(I)$1-$2]} )); then
+		target="$1-$2"; shift 2          # 2단계: mk ctx eks → ctx-eks
+	elif (( ${targets[(I)$1]} )); then
+		target="$1"; shift               # 1단계: mk change-shell
+	elif (( $# == 1 )); then
+		local -a grp; local t           # 그룹만 입력 → 하위 명령 안내
+		for t in $targets; do [[ $t == $1-* ]] && grp+=$t; done
+		if (( ${#grp} )); then
+			print -P "%F{cyan}$1%f 그룹:"
+			for t in $grp; do print "  mk $1 ${t#$1-}"; done
+			return
+		fi
+		echo "mk: 알 수 없는 명령 '$1'" >&2; make -C "$dir"; return 1
+	else
+		echo "mk: 알 수 없는 명령 '$*'" >&2
+		make -C "$dir"; return 1
+	fi
+	if (( $# )); then
+		make -C "$dir" "$target" "ARGS=$*"   # 남은 인자는 $(ARGS) 로 주입
+	else
+		make -C "$dir" "$target"
+	fi
+}
+_mk() {
+	local dir="$HOME/.peach"
+	if (( CURRENT == 2 )); then              # 첫 칸: 그룹/1단계 명령
+		compadd ${(f)"$(awk -F'[-:]' '/^[a-zA-Z0-9_-]+:.*##/{print $1}' "$dir/Makefile" 2>/dev/null | sort -u)"}
+	elif (( CURRENT == 3 )); then            # 둘째 칸: 해당 그룹의 하위 명령
+		compadd ${(f)"$(awk -F: '/^'"$words[2]"'-[a-zA-Z0-9-]+:.*##/{sub(/^'"$words[2]"'-/,\"\",$1); print $1}' "$dir/Makefile" 2>/dev/null)"}
+	fi
+}
 compdef _mk mk
 
 source ~/powerlevel10k/powerlevel10k.zsh-theme
