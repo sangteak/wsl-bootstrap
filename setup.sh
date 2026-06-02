@@ -55,7 +55,7 @@ log "── 검증 ──"
 export PATH="/usr/local/go/bin:$HOME/.fzf/bin:$HOME/.local/bin:$PATH"
 fail=0
 if zsh -ic 'exit' >/dev/null 2>&1; then log "✅ zsh 대화형 로드 OK"; else warn "❌ zsh 로드 실패"; fail=1; fi
-for t in zsh git eza batcat nvim kubectl helm go fzf aws minikube make; do
+for t in zsh git eza batcat nvim kubectl helm go fzf aws minikube make docker eksctl; do
     if command -v "$t" >/dev/null 2>&1; then log "✅ $t"; else warn "❌ $t 없음"; fail=1; fi
 done
 if [ -f "$HOME/powerlevel10k/powerlevel10k.zsh-theme" ]; then log "✅ p10k 테마 존재"; else warn "❌ p10k 없음"; fail=1; fi

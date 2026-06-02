@@ -56,6 +56,16 @@ else
     sudo install -m 0755 "$TMP/minikube" /usr/local/bin/minikube
 fi
 
+# ── eksctl (최신 release tarball, /usr/local/bin) ──────
+if have eksctl; then
+    log "eksctl: 이미 설치됨($(eksctl version 2>/dev/null)) — skip"
+else
+    log "eksctl: 설치(latest)"
+    curl -fsSL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_${ARCH}.tar.gz" -o "$TMP/eksctl.tgz"
+    tar -C "$TMP" -xzf "$TMP/eksctl.tgz" eksctl
+    sudo install -m 0755 "$TMP/eksctl" /usr/local/bin/eksctl
+fi
+
 # ── neovim (최신 release tarball, /opt + 심링크) ───────
 if have nvim; then
     log "nvim: 이미 설치됨($(nvim --version | head -1)) — skip"

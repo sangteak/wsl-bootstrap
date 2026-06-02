@@ -75,7 +75,7 @@ mk ctx local       # minikube(로컬)로 전환
 |------|------|
 | `setup.sh` | 진입점 (self-clone → install/* → 검증) |
 | `lib/common.sh` | 공통 멱등 헬퍼 |
-| `install/` | 번호순 설치 모듈 (apt→ohmyzsh→p10k→plugins→binaries→link→nvim→wsl_conf) |
+| `install/` | 번호순 설치 모듈 (apt→ohmyzsh→p10k→plugins→binaries→docker→link→nvim→wsl_conf) |
 | `dotfiles/` | `.zshrc`, `.p10k.zsh` 등 원본 |
 | `config/nvim/` | nvim `init.vim` 원본 → `~/.config/nvim/` |
 | `Makefile` | ops 명령 카탈로그 (zsh `mk` 함수로 호출) |
