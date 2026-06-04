@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# peach 누출 가드: staged 추가라인(또는 PEACH_GUARD_STDIN=1 시 stdin)에서 누출 패턴 차단.
+# 우회: git commit --no-verify (의도적일 때만). 예외: 라인에 '# peach-allow'.
+set -uo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=hooks/lib/leak-patterns.sh
+source "$HERE/lib/leak-patterns.sh"
+
+if [ "${PEACH_GUARD_STDIN:-0}" = "1" ]; then
+    added="$(cat)"
+else
+    added="$(git diff --cached --no-color -U0 | grep -E '^\+[^+]' || true)"
+fi
+
+violations=0
+while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    case "$line" in *"# peach-allow"*) continue ;; esac
+    for pat in "${PEACH_LEAK_PATTERNS[@]}"; do
+        if printf '%s' "$line" | grep -Eq "$pat"; then
+            printf '🚨 누출 의심: %s\n   패턴: %s\n' "${line#+}" "$pat" >&2
+            violations=$((violations+1))
+            break
+        fi
+    done
+done <<< "$added"
+
+if [ "$violations" -gt 0 ]; then
+    printf '\n커밋 차단: %d건. 개인값은 ~/.zshrc(개인 영역)로, 공유 필요시 일반화하거나 라인 끝에 # peach-allow.\n' "$violations" >&2
+    printf '의도적 우회: git commit --no-verify\n' >&2
+    exit 1
+fi
+exit 0
