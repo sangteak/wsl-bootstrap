@@ -2,14 +2,16 @@
 domain: wsl-environment
 status: complete
 created: 2026-06-01
-last-updated: 2026-06-02
+last-updated: 2026-06-04
 features:
   - provisioning (개발 완료 2026-06-02)
+  - contribution-flow (개발 완료 2026-06-04)
 affects:
-  - "~/.zshrc, ~/.p10k.zsh 및 기타 dotfiles"
+  - "~/.zshrc, ~/.p10k.zsh 및 기타 dotfiles (역할 인버전: 개인 entry → *.shared)"
   - "ops 명령 = ~/.peach/Makefile + zsh 'mk' 함수 (식별자는 ~/.peach.local.mk)"
   - "~/.peach (저장소 clone 위치)"
   - "/etc/wsl.conf"
+  - "hooks/pre-commit 누출 가드(core.hooksPath), dotfiles/*.shared 관리 콘텐츠"
 ---
 
 # wsl-environment 도메인
@@ -50,6 +52,8 @@ affects:
 - REQ-011: 진입점 self-clone — `setup.sh`가 git/curl 확보 → `~/.peach` clone/pull → exec → `install/*`. 원격 `curl | bash` 부트스트랩.
 - REQ-012: nvim 생태계 재현 — `config/nvim/init.vim` 배포(중첩경로), vim-plug 부트스트랩 + headless PlugInstall(플러그인 11개), apt 의존성(nodejs/npm/universal-ctags/build-essential).
 - REQ-013: 클라우드/k8s 도구 설치 — 바이너리(`50_binaries.sh`): kubectl·helm·aws cli v2·minikube·eksctl. docker는 별도 모듈 `60_docker.sh`로 **WSL 내부 systemd 네이티브** 설치(apt 공식저장소 docker-ce + `usermod -aG docker` + `systemctl enable --now docker`, 유닉스 소켓 로컬 전용). 구 `dockerd-over-TCP-2375 + Windows 배치/Task Scheduler` 우회는 systemd(REQ-008) 도입으로 폐기. systemd 미활성(클린 머신 최초 실행) 시 `wsl --shutdown` 후 재실행 안내 가드. `make`는 `10_apt`에 명시(mk의 직접 의존성).
+- REQ-014: **dotfile 역할 인버전** (feature: contribution-flow) — 개인 진입 파일(`~/.zshrc`·`~/.gitconfig`·`~/.p10k.zsh`·nvim `init.vim`)이 저장소 관리 파일(`dotfiles/*.shared`·`config/nvim/shared.vim`)을 `source`/`include`. 우리는 진입 파일을 소유하지 않으므로 개인 편집이 저장소를 오염시키지 않는다. `70_link`가 멱등 블록주입(센티넬 마커 `# >>> peach:entry >>>`)으로 entry를 관리하고, p10k instant-prompt는 entry 최상단에 둔다. 기존 `.local`(zshrc/gitconfig)은 개인 entry로 흡수 후 `.migrated`로 보존·폐지(`absorb_local`). `~/.peach.local.mk`는 별개 패턴(추적 `Makefile`에 값 주입, 직접 실행 도구라 인버전 비대상)으로 유지.
+- REQ-015: **pre-commit 누출 가드** (feature: contribution-flow) — `hooks/pre-commit`이 staged 추가라인에서 머신 종속 누출(홈 절대경로·드라이브 마운트·이메일·사설 IP·시크릿 prefix)을 차단. 패턴은 `hooks/lib/leak-patterns.sh`, 인라인 예외 `# peach-allow`, 우회 `--no-verify`. `core.hooksPath=hooks`로 활성(setup 자동, 별도 clone은 `mk contrib install-hooks`). CI 백스톱은 미채택(소규모, 후속 후보).
 
 ## 아키텍처
 
@@ -106,6 +110,8 @@ WSLConfigure/                  (= ~/.peach 로 clone됨)
 | 부트스트랩 | setup.sh 흡수(self-clone) | 부트스트랩 역설 해소 | `00_bootstrap.sh` 모듈(레이어 오류) |
 | 멱등 메커니즘 | `lib/common.sh` 공통화 | 멱등 계약 통일 | 모듈별 개별 구현(불일치 버그) |
 | docker 구동 | WSL 내부 네이티브 docker-ce + systemd | 저장소로 자동화 가능·라이선스 free·유닉스 소켓(무노출) | Docker Desktop(Windows측·자동화 불가·라이선스) / dockerd-over-TCP-2375(무인증 노출·배치/스케줄러 의존) |
+| dotfile 개인화 | 역할 인버전(개인 entry ⊃ `source *.shared`) | 학습비용0·저장소 무오염·sync-down 공짜 | 심링크-메인(개인편집이 추적파일 오염) / 복제본(sync-down 머지비용) |
+| 누출 차단 | pre-commit 가드(로컬) | 소규모 경량·우회는 의도적일 때만 | CI 백스톱(우회·미설치 막으나 v1 과함, 후속 후보) |
 
 ## 제약조건 / 가정
 - 대상 = WSL2 + Ubuntu 24.04(apt), sudo 권한, systemd=true.
@@ -156,3 +162,4 @@ WSLConfigure/                  (= ~/.peach 로 clone됨)
 | 2026-06-02 | ops 명령 정리·재구성: 미사용 8개(webhook/agones/mm101 등 테스트용) 삭제 → 4개로 축소, 고아 변수(DOCKER_NS/MM_NS/WEBHOOK/AGONES_DIR) 제거. `mk`를 `mk <그룹> <명령> [옵션...]` 서브커맨드 디스패처로 재설계(group-verb 타깃 + `##@` 그룹 help + 2단계 자동완성 + `ARGS` 옵션 주입). `ctx` 그룹 확정(`switch-aws`→`ctx-eks`, `switch-local`→`ctx-local`). `aws-clusters`·`change-shell`은 그룹 미확정(추후 정리) | complete |
 | 2026-06-02 | `ctx-eks`에 `EKS_CLUSTER` 미설정 가드 추가(가짜 기본값 `CHANGE_ME`가 Makefile 직접 수정을 유도하던 affordance 제거 → 미설정 시 실행 차단 + `~/.peach.local.mk` 안내). `AWS_REGION`/`AWS_PROFILE`은 동작하는 기본값이라 유지 | complete |
 | 2026-06-02 | 클라우드/k8s 설치 도구 확장(REQ-013): `50_binaries`에 aws cli v2·minikube·eksctl 추가, `10_apt`에 `make` 명시. **docker 신규 모듈 `60_docker.sh`** — WSL 내부 systemd 네이티브 docker-ce(apt 공식저장소 + docker 그룹 + `systemctl enable --now`). 구 dockerd-over-TCP-2375 + Windows 배치/Task Scheduler 우회 폐기(NON-003 범위 편입, 무인증 노출 제거). zshrc 죽은 docker placeholder 정리. ⚠️ 클린 WSL e2e 미검증(정적 shellcheck·URL 200만 확인) | complete |
+| 2026-06-04 | **contribution-flow 개발 완료**: dotfile 역할 인버전(REQ-014 — 개인 entry → `*.shared`, `.local` 흡수·폐지·`.migrated` 보존) + pre-commit 누출 가드(REQ-015 — `hooks/`, 절대경로·이메일·IP·시크릿 차단, `mk contrib`). `lib/common.sh` 헬퍼 3종(inject_block/ensure_managed_entry/absorb_local), `70_link`/`80_nvim` 인버전, `setup.sh` core.hooksPath. shellcheck clean·bats 18/18·임시HOME e2e·가드 라이브 차단 검증. ⚠️ 클린 WSL setup.sh 전체 e2e 미수행 | complete |

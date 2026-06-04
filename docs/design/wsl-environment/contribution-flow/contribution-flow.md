@@ -1,7 +1,7 @@
 ---
 feature: contribution-flow
 category: wsl-environment
-status: ready-for-plan
+status: complete
 created: 2026-06-04
 last-updated: 2026-06-04
 dependencies:
