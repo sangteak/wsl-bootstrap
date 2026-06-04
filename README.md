@@ -20,11 +20,16 @@ bash ~/.peach/setup.sh
 
 ## 재적용 (업데이트)
 
-스크립트/설정을 수정·추가한 뒤 다시 실행하면 변경분만 적용됩니다(멱등).
+저장소의 최신 변경을 받아 다시 적용하려면 **부트스트랩(curl)으로 재실행**합니다. `~/.peach`를
+자동으로 `git pull`한 뒤 멱등 적용합니다(변경분만):
 
 ```bash
-bash ~/.peach/setup.sh
+curl -fsSL https://raw.githubusercontent.com/sangteak/wsl-bootstrap/main/setup.sh | bash
 ```
+
+> ⚠️ `bash ~/.peach/setup.sh`로 **직접** 실행하면 self-clone 로직이 "실행 위치 = `~/.peach`"를
+> 감지해 **`git pull`을 건너뜁니다**(로컬 `~/.peach` 현재 내용만 재적용 → 원격 변경 미반영).
+> 최신화가 목적이면 위 curl 방식을 쓰거나, 먼저 `git -C ~/.peach pull --ff-only` 후 실행하세요.
 
 ## 설치 후 필수 1회 단계
 
