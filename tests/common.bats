@@ -61,3 +61,28 @@ teardown() { rm -rf "$TMP"; }
     inject_block "$f" demo "export A=1"
     grep -q "alias me=ll" "$f"
 }
+
+@test "ensure_managed_entry: 신규 파일은 헤더가 맨 앞" {
+    local f="$BATS_TEST_TMPDIR/zrc"
+    ensure_managed_entry "$f" "$(printf 'INSTANT\nsource SHARED')"
+    head -1 "$f" | grep -q "# >>> peach:entry >>>"
+    grep -q "INSTANT" "$f"
+    grep -q "source SHARED" "$f"
+}
+
+@test "ensure_managed_entry: 기존 개인 내용은 헤더 아래 보존" {
+    local f="$BATS_TEST_TMPDIR/zrc"
+    printf 'alias me=ll\n' > "$f"
+    ensure_managed_entry "$f" "source SHARED"
+    head -1 "$f" | grep -q "# >>> peach:entry >>>"
+    grep -q "alias me=ll" "$f"
+}
+
+@test "ensure_managed_entry: 재실행 멱등 — 헤더 1개" {
+    local f="$BATS_TEST_TMPDIR/zrc"
+    ensure_managed_entry "$f" "source V1"
+    ensure_managed_entry "$f" "source V2"
+    [ "$(grep -c '# >>> peach:entry >>>' "$f")" -eq 1 ]
+    grep -q "source V2" "$f"
+    ! grep -q "source V1" "$f"
+}

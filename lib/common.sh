@@ -94,3 +94,28 @@ inject_block() {
         { printf '%s\n%s\n%s\n' "$begin" "$content" "$end"; } >> "$target"
     fi
 }
+
+# ensure_managed_entry <target> <header_content>
+# peach:entry 헤더 블록을 파일 '맨 앞'에 멱등 보장(교체/선행 삽입). 나머지(개인 영역)는 보존.
+ensure_managed_entry() {
+    local target="$1" content="$2"
+    local begin="# >>> peach:entry >>>"
+    local end="# <<< peach:entry <<<"
+    mkdir -p "$(dirname "$target")"
+    [ -f "$target" ] || : > "$target"
+    local body; body="$(mktemp)"
+    if grep -qF "$begin" "$target"; then
+        awk -v b="$begin" -v e="$end" '
+            $0==b {skip=1; next} $0==e {skip=0; next} skip{next} {print}
+        ' "$target" > "$body"
+    else
+        cp "$target" "$body"
+    fi
+    local out; out="$(mktemp)"
+    {
+        printf '%s\n%s\n%s\n' "$begin" "$content" "$end"
+        cat "$body"
+    } > "$out"
+    mv "$out" "$target"
+    rm -f "$body"
+}
