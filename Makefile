@@ -12,7 +12,7 @@ AWS_PROFILE ?= default
 AWS_REGION  ?= ap-northeast-2
 EKS_CLUSTER ?= CHANGE_ME
 
-.PHONY: help ctx-eks ctx-local aws-tools aws-whoami aws-can aws-clusters change-shell
+.PHONY: help ctx-eks ctx-local aws-tools aws-whoami aws-can aws-clusters change-shell contrib-install-hooks contrib-edit
 
 help: ## 이 명령 목록 출력
 	@awk 'BEGIN{FS=":.*##"} /^##@/{printf "\n\033[1m%s\033[0m\n", substr($$0,5); next} /^[a-zA-Z0-9_-]+:.*##/{printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -66,3 +66,17 @@ aws-clusters: ## AWS EKS 클러스터 목록 조회
 
 change-shell: ## 기본 셸을 zsh로 변경
 	sudo chsh -s "$$(which zsh)" "$$USER"
+
+##@ contrib — 저장소 기여 (mk contrib <명령>)
+contrib-install-hooks: ## 이 clone에 누출 가드(pre-commit) 활성화
+	git -C $(HOME)/.peach config core.hooksPath hooks 2>/dev/null || git config core.hooksPath hooks
+	@echo "core.hooksPath=hooks 설정 완료(누출 가드 활성)"
+contrib-edit: ## 관리 dotfile을 $EDITOR로 열기 (mk contrib edit [zshrc|gitconfig|p10k|nvim])
+	@target="$(ARGS)"; case "$$target" in \
+	  zshrc|"") f="$(HOME)/.peach/dotfiles/zshrc.shared" ;; \
+	  gitconfig) f="$(HOME)/.peach/dotfiles/gitconfig.shared" ;; \
+	  p10k) f="$(HOME)/.peach/dotfiles/p10k.zsh" ;; \
+	  nvim) f="$(HOME)/.peach/config/nvim/shared.vim" ;; \
+	  *) echo "알 수 없는 대상: $$target (zshrc|gitconfig|p10k|nvim)"; exit 1 ;; \
+	esac; \
+	$${EDITOR:-vi} "$$f"

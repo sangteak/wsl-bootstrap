@@ -29,6 +29,13 @@ fi
 # shellcheck source=lib/common.sh
 source "$PEACH_DIR/lib/common.sh"
 
+# ── 2.5. pre-commit 누출 가드 활성화(per-clone 로컬 설정) ──
+if git -C "$PEACH_DIR" config core.hooksPath hooks 2>/dev/null; then
+    log "core.hooksPath=hooks 설정(누출 가드 활성)"
+else
+    warn "core.hooksPath 설정 실패 — 'mk contrib install-hooks'로 수동 활성화"
+fi
+
 # ── 3. install 모듈 순차 실행 (멱등) ───────────────────
 for mod in "$PEACH_DIR"/install/[0-9]*.sh; do
     log "── 실행: $(basename "$mod") ──"
