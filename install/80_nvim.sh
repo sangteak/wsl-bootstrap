@@ -13,10 +13,14 @@ mkdir -p "$NVIM_DIR"
 INIT="$NVIM_DIR/init.vim"
 NVIM_MARK='" >>> peach:entry >>>'
 if ! grep -qF "$NVIM_MARK" "$INIT" 2>/dev/null; then
-    { printf '%s\n' "$NVIM_MARK"
-      printf 'source %s/config/nvim/shared.vim\n' "$HOME/.peach"
-      printf '%s\n' '" <<< peach:entry <<<'
-      [ -f "$INIT" ] && cat "$INIT"; } > "$INIT.tmp" && mv "$INIT.tmp" "$INIT"
+    {
+        printf '%s\n' "$NVIM_MARK"
+        printf 'source %s/config/nvim/shared.vim\n' "$HOME/.peach"
+        printf '%s\n' '" <<< peach:entry <<<'
+        # 기존 개인 init.vim이 있으면 헤더 아래로 보존(없으면 건너뜀 — 그룹 종료코드 0 유지)
+        if [ -f "$INIT" ]; then cat "$INIT"; fi
+    } > "$INIT.tmp"
+    mv "$INIT.tmp" "$INIT"
 fi
 log "80_nvim: ~/.config/nvim/init.vim entry 보장(인버전)"
 
