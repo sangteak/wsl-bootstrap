@@ -12,7 +12,14 @@ if ! command -v git >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then
 fi
 
 # ── 2. self-clone: ~/.peach 에서 실행 중이 아니면 clone/pull 후 재실행 ──
-THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# curl | bash(파이프 실행) 시 BASH_SOURCE[0]가 없음 → 빈 THIS_DIR로 두어
+# 아래 self-clone 분기로 진입시킨다(set -u 안전).
+SRC="${BASH_SOURCE[0]:-}"
+if [ -n "$SRC" ] && [ -f "$SRC" ]; then
+    THIS_DIR="$(cd "$(dirname "$SRC")" && pwd)"
+else
+    THIS_DIR=""
+fi
 if [ "$THIS_DIR" != "$PEACH_DIR" ]; then
     if [ -d "$PEACH_DIR/.git" ]; then
         echo "[peach] git pull: $PEACH_DIR"
