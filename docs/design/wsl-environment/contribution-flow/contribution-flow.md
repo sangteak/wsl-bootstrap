@@ -122,9 +122,33 @@ affects:
 - **`.local` Hard absorb (D-09=1)**: setup이 기존 `~/.zshrc.local`·`~/.gitconfig.local`를 개인 진입 파일로 이전 후 참조 제거·폐지. 개인 데이터 이전이므로 **이전 전 백업 + 멱등(이미 흡수됐으면 재실행 시 no-op)** 필수. PLAN에서 이전 알고리즘·실패 롤백 명시.
 - `~/.peach.local.mk`는 흡수 대상 아님 — Makefile `-include`(있으면 로드) + `?=`(미설정 시만 기본값) 조합으로 머신 값을 주입하는 별개 패턴. gitignore + `.example`만 커밋되어 인프라 식별자(AWS 프로파일·클러스터명) 미노출. 인버전 비적용(직접 실행 도구라 진입점 부재).
 
-## 9. 구현 결과 및 일탈 사항
+## 9. 구현 결과 및 일탈 사항 (2026-06-04 완료)
 
-> 구현 완료 후 작성
+### 산출물 (feature/contribution-flow, 커밋 9개)
+- `lib/common.sh`: `inject_block` / `ensure_managed_entry` / `absorb_local` 3종 헬퍼 (+ `tests/common.bats` 14/14)
+- `dotfiles/*.shared` 분리(zshrc/gitconfig), `config/nvim/shared.vim`, `.local.example` 폐지
+- `install/70_link.sh` 인버전 재작성, `install/80_nvim.sh` 인버전 반영
+- `hooks/pre-commit` + `hooks/lib/leak-patterns.sh` 누출 가드 (+ `tests/guard.bats` 4/4)
+- `setup.sh` `core.hooksPath` 자동 설정, `Makefile` `contrib` 그룹(install-hooks/edit)
+- `README.md` 기여 흐름 섹션 + 머신종속/구조 갱신
+
+### 설계 대비 일탈/보강
+- **gitconfig.shared 빈 seam**: 원본 `dotfiles/gitconfig`에 공유 git 설정이 없고 `[include]`뿐이었음 → 인버전 후 빈 파일. 헤더 주석을 넣어 "향후 공유 alias/core 자리" seam으로 유지(개인 식별값은 개인 `~/.gitconfig`).
+- **`.claude` 캐시 gitignore 앵커 수정**: 기존 `.claude/statusline-*.json` 패턴이 중간 슬래시로 루트에만 앵커되어 `docs/design/.claude/`를 못 잡음 → `**/.claude/` 로 수정 + 추적 해제.
+- **nvim entry는 1회성 prepend**: `ensure_managed_entry`(교체형) 대신 마커 부재 시 1회 prepend. 관리 경로(`~/.peach`)가 안정적이라는 가정. 경로 변경 시 자동 갱신 안 됨(한계).
+- 전 모듈 `SCRIPT_DIR` 컨벤션·`# shellcheck source-path=SCRIPTDIR` 통일.
+
+### 검증 수준 (정직한 보고)
+- ✅ 정적 `shellcheck -x` exit 0 (lib/install/setup/hooks 전부)
+- ✅ 단위 `bats tests/` 18/18 (common 14 + guard 4) — 가드 사설IP/AWS키/`/mnt` 탐지 + 버전번호·공인IP 오탐 없음 추가 확인
+- ✅ 임시 HOME e2e: 인버전(헤더 최상단·개인내용 보존·source), `.local` 흡수(+`.migrated`), git `[include]` 탭, 멱등(재실행 헤더 1개)
+- ✅ 가드 라이브 차단: 실제 누출 커밋이 hook에 의해 차단됨(명확한 안내 메시지)
+- ⚠️ **미수행**: 깨끗한 WSL에서 `setup.sh` 1회 전체 e2e(apt/sudo/바이너리 + 실제 셸 적용)는 본 환경에서 실행 안 함. **진짜 통합 검증 = 클린 WSL 1회.** 특히 실제 로그인 셸에서 p10k instant-prompt 순서·oh-my-zsh 로드 정상 여부는 클린 머신 확인 필요.
+
+### 알려진 한계 (수용/후속)
+- **가드 우회·미설치 노출 (D-07=1 수용)**: 로컬 hook만 → 갓-clone(hook 미설치)·`git commit --no-verify`로 우회 가능. CI 백스톱은 후속 후보.
+- **p10k 재생성 충돌**: `p10k configure`가 `~/.p10k.zsh`(개인 entry)를 재생성하면 `source` 라인 소실 → `70_link` 재실행(또는 `mk` 재적용)으로 복구.
+- **nvim entry 경로 비갱신**: 위 일탈 참조.
 
 ## 10. 변경 이력
 
@@ -132,3 +156,4 @@ affects:
 |------|-----------|-----------|------|
 | 2026-06-04 | 브레인스토밍(국면 1~4): 역할 인버전 모델 + pre-commit 누출 가드 설계 확정 | dotfiles 전체, 70_link, hooks, setup, Makefile | ready-for-plan |
 | 2026-06-04 | D-09=1 확정: `.local`(zshrc/gitconfig) Hard absorb 폐지(REQ-109), `~/.peach.local.mk`는 별개 패턴으로 유지 | install, setup, dotfiles | ready-for-plan |
+| 2026-06-04 | 개발 완료(T1~T9): 헬퍼 3종 + dotfile 인버전 + 누출 가드 + mk contrib + README. shellcheck clean, bats 18/18, e2e·가드 라이브 검증. 클린 WSL e2e 미수행 | 전체 | 개발 완료 |
