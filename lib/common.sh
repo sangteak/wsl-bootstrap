@@ -68,3 +68,29 @@ link_with_backup() {
     ln -sfn "$src" "$dst"
     log "link: $dst → $src"
 }
+
+# ── 멱등 마커 블록 주입 ────────────────────────────────
+# inject_block <target> <marker> <content>
+# 멱등: peach:<marker> 블록이 있으면 교체, 없으면 끝에 append. 마커 밖은 불간섭.
+inject_block() {
+    local target="$1" marker="$2" content="$3"
+    local begin="# >>> peach:${marker} >>>"
+    local end="# <<< peach:${marker} <<<"
+    mkdir -p "$(dirname "$target")"
+    [ -f "$target" ] || : > "$target"
+    if grep -qF "$begin" "$target"; then
+        local tmp; tmp="$(mktemp)"
+        local cfile; cfile="$(mktemp)"
+        printf '%s\n' "$content" > "$cfile"
+        awk -v b="$begin" -v e="$end" -v cf="$cfile" '
+            $0==b { print; while ((getline line < cf) > 0) print line; close(cf); skip=1; next }
+            $0==e { skip=0; print; next }
+            skip { next }
+            { print }
+        ' "$target" > "$tmp"
+        mv "$tmp" "$target"
+        rm -f "$cfile"
+    else
+        { printf '%s\n%s\n%s\n' "$begin" "$content" "$end"; } >> "$target"
+    fi
+}

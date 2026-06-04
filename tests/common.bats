@@ -37,3 +37,27 @@ teardown() { rm -rf "$TMP"; }
     link_with_backup "$TMP/src" "$TMP/dst" "$TMP/bak"
     [ ! -d "$TMP/bak" ] || [ -z "$(ls -A "$TMP/bak")" ]
 }
+
+@test "inject_block: 신규 파일에 마커 블록 append" {
+    local f="$BATS_TEST_TMPDIR/rc"
+    inject_block "$f" demo "export A=1"
+    grep -q "# >>> peach:demo >>>" "$f"
+    grep -q "export A=1" "$f"
+    grep -q "# <<< peach:demo <<<" "$f"
+}
+
+@test "inject_block: 재실행 멱등 — 블록 중복 없음" {
+    local f="$BATS_TEST_TMPDIR/rc"
+    inject_block "$f" demo "export A=1"
+    inject_block "$f" demo "export A=2"
+    [ "$(grep -c '# >>> peach:demo >>>' "$f")" -eq 1 ]
+    grep -q "export A=2" "$f"
+    ! grep -q "export A=1" "$f"
+}
+
+@test "inject_block: 마커 밖 개인 내용 불간섭" {
+    local f="$BATS_TEST_TMPDIR/rc"
+    printf 'alias me=ll\n' > "$f"
+    inject_block "$f" demo "export A=1"
+    grep -q "alias me=ll" "$f"
+}
