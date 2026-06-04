@@ -15,10 +15,10 @@ EKS_CLUSTER ?= CHANGE_ME
 # 인자 변수는 mk가 명령줄(KEY=val)로 전달한다. 같은 이름의 '환경변수' 누출(예: $NAME=호스트명)은
 # make가 변수로 흡수해 가드를 무력화하므로, 환경 출처(origin=environment)인 것만 비운다.
 # (명령줄로 넘긴 값은 origin=command line 이라 보존됨)
-ARG_VARS := NAME VPC PROTO FROM TO CIDR DESC SG
+ARG_VARS := NAME VPC PROTO FROM TO CIDR DESC SG FILE YES
 $(foreach v,$(ARG_VARS),$(if $(filter environment,$(origin $(v))),$(eval $(v) :=)))
 
-.PHONY: help ctx-eks ctx-local aws-tools aws-whoami aws-can aws-clusters change-shell contrib-install-hooks contrib-edit aws-sg-create aws-sg-authorize aws-sg-list aws-sg-delete
+.PHONY: help ctx-eks ctx-local aws-tools aws-whoami aws-can aws-clusters change-shell contrib-install-hooks contrib-edit aws-sg-create aws-sg-authorize aws-sg-list aws-sg-delete aws-eks-describe aws-eks-nodes aws-eks-ng-list aws-eks-ng-describe aws-eks-cluster-create aws-eks-ng-create aws-eks-ng-delete aws-eks-lt-delete
 
 # ── 공통 해소(이름 기반 디스커버리, D-03=C) ──────────────────
 # VPC: 인자 VPC= 우선, 없으면 EKS_CLUSTER 의 VPC 를 describe 로 해소.
@@ -113,6 +113,63 @@ aws-sg-delete: ## 삭제 (NAME= [VPC=])
 	$(RESOLVE_SG)
 	aws ec2 delete-security-group --group-id "$$SG" --region $(AWS_REGION) --profile $(AWS_PROFILE)
 	echo "deleted SG '$(NAME)' ($$SG)"
+
+##@ aws eks — 클러스터·노드그룹 라이프사이클 (mk aws eks <명령>; 삭제는 YES=1 확인)
+aws-eks-describe: ## 클러스터 VPC·clusterSG·endpoint 조회 (describe-cluster)
+	@if [ "$(EKS_CLUSTER)" = "CHANGE_ME" ]; then echo "EKS_CLUSTER 미설정 (~/.peach.local.mk)" >&2; exit 1; fi
+	aws eks describe-cluster --name $(EKS_CLUSTER) --region $(AWS_REGION) --profile $(AWS_PROFILE) \
+	  --query 'cluster.{Name:name,Status:status,Version:version,VPC:resourcesVpcConfig.vpcId,ClusterSG:resourcesVpcConfig.clusterSecurityGroupId,Endpoint:endpoint}' --output table
+
+aws-eks-nodes: ## 노드 목록: 인스턴스타입·arch·cpu (kubectl get nodes)
+	kubectl get nodes -o 'custom-columns=NODE:.metadata.name,INSTANCE:.metadata.labels.node\.kubernetes\.io/instance-type,ARCH:.metadata.labels.kubernetes\.io/arch,CPU:.status.capacity.cpu'
+
+aws-eks-ng-list: ## 노드그룹 목록·TYPE(managed/unmanaged) (eksctl)
+	@if [ "$(EKS_CLUSTER)" = "CHANGE_ME" ]; then echo "EKS_CLUSTER 미설정 (~/.peach.local.mk)" >&2; exit 1; fi
+	AWS_PROFILE=$(AWS_PROFILE) eksctl get nodegroup --cluster $(EKS_CLUSTER) --region $(AWS_REGION)
+
+aws-eks-ng-describe: ## 노드그룹 role·subnets 조회 (NAME=)
+	@test -n "$(NAME)" || { echo "NAME= 필요 (예: mk aws eks ng-describe NAME=general)" >&2; exit 1; }
+	@if [ "$(EKS_CLUSTER)" = "CHANGE_ME" ]; then echo "EKS_CLUSTER 미설정 (~/.peach.local.mk)" >&2; exit 1; fi
+	aws eks describe-nodegroup --cluster-name $(EKS_CLUSTER) --nodegroup-name "$(NAME)" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
+	  --query 'nodegroup.{Role:nodeRole,Subnets:subnets,Status:status,Type:nodegroupType}' --output table
+
+aws-eks-cluster-create: ## 클러스터 생성 (FILE=cluster.yaml; eksctl -f)
+	@test -n "$(FILE)" || { echo "FILE= 필요 (예: mk aws eks cluster-create FILE=cluster.yaml)" >&2; exit 1; }
+	@test -f "$(FILE)" || { echo "파일 없음: $(FILE)" >&2; exit 1; }
+	AWS_PROFILE=$(AWS_PROFILE) eksctl create cluster -f "$(FILE)"
+
+aws-eks-ng-create: ## 노드그룹 생성 (FILE=ng.json; --cli-input-json)
+	@test -n "$(FILE)" || { echo "FILE= 필요 (예: mk aws eks ng-create FILE=ng.json)" >&2; exit 1; }
+	@test -f "$(FILE)" || { echo "파일 없음: $(FILE)" >&2; exit 1; }
+	aws eks create-nodegroup --cli-input-json "file://$(FILE)" --region $(AWS_REGION) --profile $(AWS_PROFILE)
+
+aws-eks-ng-delete: ## 노드그룹 삭제 (NAME= YES=1)
+	@test -n "$(NAME)" || { echo "NAME= 필요 (예: mk aws eks ng-delete NAME=ingame-ds)" >&2; exit 1; }
+	@if [ "$(EKS_CLUSTER)" = "CHANGE_ME" ]; then echo "EKS_CLUSTER 미설정 (~/.peach.local.mk)" >&2; exit 1; fi
+	echo "▼ 삭제 대상 (cluster=$(EKS_CLUSTER)):" >&2
+	aws eks describe-nodegroup --cluster-name $(EKS_CLUSTER) --nodegroup-name "$(NAME)" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
+	  --query 'nodegroup.{NG:nodegroupName,Status:status,Type:nodegroupType,Desired:scalingConfig.desiredSize,Min:scalingConfig.minSize,Max:scalingConfig.maxSize}' --output table
+	if [ "$(YES)" != "1" ]; then
+	  echo "" >&2
+	  echo "⚠️  이 노드그룹을 삭제하면 해당 노드의 진행 중 매치가 모두 종료됩니다." >&2
+	  echo "    확인하려면 YES=1 을 추가하세요:  mk aws eks ng-delete NAME=$(NAME) YES=1" >&2
+	  exit 1
+	fi
+	aws eks delete-nodegroup --cluster-name $(EKS_CLUSTER) --nodegroup-name "$(NAME)" --region $(AWS_REGION) --profile $(AWS_PROFILE)
+	echo "✅ 삭제 요청됨: nodegroup '$(NAME)' (비동기 — mk aws eks ng-list 로 진행 확인)"
+
+aws-eks-lt-delete: ## 런치템플릿 삭제 (NAME= YES=1)
+	@test -n "$(NAME)" || { echo "NAME= 필요 (예: mk aws eks lt-delete NAME=ingame-lt)" >&2; exit 1; }
+	echo "▼ 삭제 대상:" >&2
+	aws ec2 describe-launch-templates --launch-template-names "$(NAME)" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
+	  --query 'LaunchTemplates[0].{Name:LaunchTemplateName,Id:LaunchTemplateId,Default:DefaultVersionNumber,Latest:LatestVersionNumber}' --output table
+	if [ "$(YES)" != "1" ]; then
+	  echo "    확인하려면 YES=1 을 추가하세요:  mk aws eks lt-delete NAME=$(NAME) YES=1" >&2
+	  exit 1
+	fi
+	aws ec2 delete-launch-template --launch-template-name "$(NAME)" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
+	  --query 'LaunchTemplate.LaunchTemplateId' --output text
+	echo "✅ 삭제됨: launch-template '$(NAME)'"
 
 change-shell: ## 기본 셸을 zsh로 변경
 	sudo chsh -s "$$(which zsh)" "$$USER"
