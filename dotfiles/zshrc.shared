@@ -156,29 +156,29 @@ mk() {
 	local -a targets
 	targets=(${(f)"$(awk -F: '/^[a-zA-Z0-9_-]+:.*##/{print $1}' "$dir/Makefile" 2>/dev/null)"})
 	(( $# )) || { make -C "$dir"; return }
-	local target
-	if (( $# >= 2 )) && (( ${targets[(I)$1-$2]} )); then
-		target="$1-$2"; shift 2          # 2단계: mk ctx eks → ctx-eks
-	elif (( ${targets[(I)$1]} )); then
-		target="$1"; shift               # 1단계: mk change-shell
-	elif (( $# == 1 )); then
-		local -a grp; local t           # 그룹만 입력 → 하위 명령 안내
-		for t in $targets; do [[ $t == $1-* ]] && grp+=$t; done
+	# 명령부 = 선두 bare(= 없는) 토큰의 '최장 접두' 매칭, 나머지 = 인자.
+	#   mk aws sg create NAME=x  →  타깃 aws-sg-create, 인자 NAME=x
+	local -a parts; local a
+	for a in "$@"; do [[ $a == *=* ]] && break; parts+=$a; done
+	local target="" n
+	for (( n=${#parts}; n>=1; n-- )); do
+		local cand=${(j:-:)parts[1,n]}
+		(( ${targets[(I)$cand]} )) && { target=$cand; shift $n; break }
+	done
+	if [[ -z $target ]]; then            # 타깃 아님 → 접두 그룹 안내
+		local prefix=${(j:-:)parts}; local -a grp; local t
+		for t in $targets; do [[ $t == $prefix-* ]] && grp+=$t; done
 		if (( ${#grp} )); then
-			print -P "%F{cyan}$1%f 그룹:"
-			for t in $grp; do print "  mk $1 ${t#$1-}"; done
+			print -P "%F{cyan}${(j: :)parts}%f 하위:"
+			for t in $grp; do print "  mk ${t//-/ }"; done
 			return
 		fi
-		echo "mk: 알 수 없는 명령 '$1'" >&2; make -C "$dir"; return 1
-	else
-		echo "mk: 알 수 없는 명령 '$*'" >&2
-		make -C "$dir"; return 1
+		echo "mk: 알 수 없는 명령 '$*'" >&2; make -C "$dir"; return 1
 	fi
-	if (( $# )); then
-		make -C "$dir" "$target" "ARGS=$*"   # 남은 인자는 $(ARGS) 로 주입
-	else
-		make -C "$dir" "$target"
-	fi
+	# 하이브리드 인자: KEY=val → make 변수, bare → ARGS
+	local -a vars words
+	for a in "$@"; do [[ $a == *=* ]] && vars+=$a || words+=$a; done
+	make -C "$dir" "$target" "${vars[@]}" ${words:+"ARGS=${words[*]}"}
 }
 _mk() {
 	local dir="$HOME/.peach"

@@ -12,7 +12,28 @@ AWS_PROFILE ?= default
 AWS_REGION  ?= ap-northeast-2
 EKS_CLUSTER ?= CHANGE_ME
 
-.PHONY: help ctx-eks ctx-local aws-tools aws-whoami aws-can aws-clusters change-shell contrib-install-hooks contrib-edit
+# 인자 변수는 mk가 명령줄(KEY=val)로 전달한다. 같은 이름의 '환경변수' 누출(예: $NAME=호스트명)은
+# make가 변수로 흡수해 가드를 무력화하므로, 환경 출처(origin=environment)인 것만 비운다.
+# (명령줄로 넘긴 값은 origin=command line 이라 보존됨)
+ARG_VARS := NAME VPC PROTO FROM TO CIDR DESC SG
+$(foreach v,$(ARG_VARS),$(if $(filter environment,$(origin $(v))),$(eval $(v) :=)))
+
+.PHONY: help ctx-eks ctx-local aws-tools aws-whoami aws-can aws-clusters change-shell contrib-install-hooks contrib-edit aws-sg-create aws-sg-authorize aws-sg-list aws-sg-delete
+
+# ── 공통 해소(이름 기반 디스커버리, D-03=C) ──────────────────
+# VPC: 인자 VPC= 우선, 없으면 EKS_CLUSTER 의 VPC 를 describe 로 해소.
+define RESOLVE_VPC
+VPC="$(VPC)"
+if [ -z "$$VPC" ]; then
+  if [ "$(EKS_CLUSTER)" = "CHANGE_ME" ]; then echo "VPC= 를 주거나 ~/.peach.local.mk 에 EKS_CLUSTER 를 설정하세요" >&2; exit 1; fi
+  VPC=$$(aws eks describe-cluster --name $(EKS_CLUSTER) --region $(AWS_REGION) --profile $(AWS_PROFILE) --query 'cluster.resourcesVpcConfig.vpcId' --output text)
+fi
+endef
+# SG ID: 이름(NAME)+VPC 로 describe 해 ID 를 즉석 해소(저장 안 함).
+define RESOLVE_SG
+SG=$$(aws ec2 describe-security-groups --filters Name=group-name,Values="$(NAME)" Name=vpc-id,Values="$$VPC" --region $(AWS_REGION) --profile $(AWS_PROFILE) --query 'SecurityGroups[0].GroupId' --output text)
+if [ -z "$$SG" ] || [ "$$SG" = "None" ]; then echo "SG '$(NAME)' 를 VPC $$VPC 에서 찾지 못했습니다" >&2; exit 1; fi
+endef
 
 help: ## 이 명령 목록 출력
 	@awk 'BEGIN{FS=":.*##"} /^##@/{printf "\n\033[1m%s\033[0m\n", substr($$0,5); next} /^[a-zA-Z0-9_-]+:.*##/{printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -63,6 +84,35 @@ aws-can: ## EKS 생성 액션 허용 여부 시뮬레이션 (mk aws can [PRINCIP
 
 aws-clusters: ## AWS EKS 클러스터 목록 조회
 	aws eks list-clusters --region $(AWS_REGION) --profile $(AWS_PROFILE)
+
+##@ aws sg — 보안그룹 (mk aws sg <동작> NAME= …; ID는 이름으로 자동 해소)
+aws-sg-create: ## 생성 (NAME= [DESC=] [VPC=])
+	@test -n "$(NAME)" || { echo "NAME= 필요 (예: mk aws sg create NAME=ingame-ds-sg)" >&2; exit 1; }
+	$(RESOLVE_VPC)
+	aws ec2 create-security-group --group-name "$(NAME)" --description "$(if $(DESC),$(DESC),$(NAME))" \
+	  --vpc-id "$$VPC" --region $(AWS_REGION) --profile $(AWS_PROFILE) --query GroupId --output text
+
+aws-sg-authorize: ## 인바운드 규칙 추가 (NAME= PROTO= FROM= TO= [CIDR=] [VPC=])
+	@test -n "$(NAME)" || { echo "NAME= 필요" >&2; exit 1; }
+	@test -n "$(PROTO)" && test -n "$(FROM)" && test -n "$(TO)" || { echo "PROTO= FROM= TO= 필요" >&2; exit 1; }
+	$(RESOLVE_VPC)
+	$(RESOLVE_SG)
+	aws ec2 authorize-security-group-ingress --group-id "$$SG" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
+	  --ip-permissions "IpProtocol=$(PROTO),FromPort=$(FROM),ToPort=$(TO),IpRanges=[{CidrIp=$(if $(CIDR),$(CIDR),0.0.0.0/0)}]"
+
+aws-sg-list: ## 인바운드/아웃바운드 규칙 조회 (NAME= [VPC=])
+	@test -n "$(NAME)" || { echo "NAME= 필요" >&2; exit 1; }
+	$(RESOLVE_VPC)
+	$(RESOLVE_SG)
+	aws ec2 describe-security-group-rules --filters Name=group-id,Values="$$SG" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
+	  --query 'SecurityGroupRules[].{Id:SecurityGroupRuleId,Egress:IsEgress,Proto:IpProtocol,From:FromPort,To:ToPort,CIDR:CidrIpv4,SrcSG:ReferencedGroupInfo.GroupId}' --output table
+
+aws-sg-delete: ## 삭제 (NAME= [VPC=])
+	@test -n "$(NAME)" || { echo "NAME= 필요" >&2; exit 1; }
+	$(RESOLVE_VPC)
+	$(RESOLVE_SG)
+	aws ec2 delete-security-group --group-id "$$SG" --region $(AWS_REGION) --profile $(AWS_PROFILE)
+	echo "deleted SG '$(NAME)' ($$SG)"
 
 change-shell: ## 기본 셸을 zsh로 변경
 	sudo chsh -s "$$(which zsh)" "$$USER"
