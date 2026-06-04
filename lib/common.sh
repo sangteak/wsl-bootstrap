@@ -95,6 +95,21 @@ inject_block() {
     fi
 }
 
+# absorb_local <local_file> <entry_file>
+# .local 내용을 entry 끝(개인 영역)에 흡수 후 .local → .migrated 로 보존(삭제 안 함). 멱등.
+absorb_local() {
+    local src="$1" dst="$2"
+    [ -f "$src" ] || return 0      # 이미 흡수됐거나 없음 → no-op
+    mkdir -p "$(dirname "$dst")"
+    [ -f "$dst" ] || : > "$dst"
+    {
+        printf '\n# ── absorbed from %s (peach contribution-flow) ──\n' "$(basename "$src")"
+        cat "$src"
+    } >> "$dst"
+    mv "$src" "$src.migrated"
+    log "absorb_local: $(basename "$src") → entry 흡수 + .migrated 보존"
+}
+
 # ensure_managed_entry <target> <header_content>
 # peach:entry 헤더 블록을 파일 '맨 앞'에 멱등 보장(교체/선행 삽입). 나머지(개인 영역)는 보존.
 ensure_managed_entry() {

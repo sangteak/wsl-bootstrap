@@ -86,3 +86,30 @@ teardown() { rm -rf "$TMP"; }
     grep -q "source V2" "$f"
     ! grep -q "source V1" "$f"
 }
+
+@test "absorb_local: 내용을 target에 흡수하고 .migrated로 보존" {
+    local src="$BATS_TEST_TMPDIR/.zshrc.local"
+    local dst="$BATS_TEST_TMPDIR/.zshrc"
+    printf 'export SECRET=/home/me\n' > "$src"
+    : > "$dst"
+    absorb_local "$src" "$dst"
+    grep -q "export SECRET=/home/me" "$dst"
+    [ ! -f "$src" ]
+    [ -f "$src.migrated" ]
+}
+
+@test "absorb_local: 원본 없으면 no-op" {
+    local src="$BATS_TEST_TMPDIR/none.local"
+    local dst="$BATS_TEST_TMPDIR/.zshrc"; : > "$dst"
+    run absorb_local "$src" "$dst"
+    [ "$status" -eq 0 ]
+}
+
+@test "absorb_local: 재실행 멱등 — 중복 흡수 없음" {
+    local src="$BATS_TEST_TMPDIR/.zshrc.local"
+    local dst="$BATS_TEST_TMPDIR/.zshrc"
+    printf 'export A=1\n' > "$src"; : > "$dst"
+    absorb_local "$src" "$dst"
+    absorb_local "$src" "$dst"
+    [ "$(grep -c 'export A=1' "$dst")" -eq 1 ]
+}
