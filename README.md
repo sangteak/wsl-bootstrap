@@ -181,29 +181,70 @@ Windows docker.exe/VSCode → DOCKER_HOST=tcp://localhost:2375 → (mirrored 공
 | WSL drop-in | WSL ext4 | **1)** 재실행 |
 | Windows 작업·`DOCKER_HOST`·`.peach-win` | Windows | **2)** 재실행 |
 
-## 머신 종속 설정
+## 개인 설정 · 머신 종속 값
 
-IP 등 머신마다 다른 값은 `~/.zshrc.local`에 둡니다(저장소 커밋 금지):
+dotfile은 **역할 인버전** 구조입니다(아래 "기여 흐름" 참조). 개인 설정은
+`~/.zshrc`·`~/.gitconfig`를 **그냥 직접 수정**하면 됩니다 — 저장소에 올라가지 않습니다.
+(별도 `.local` 사이드카는 폐지됐고, 기존 값은 설치 시 개인 파일로 자동 흡수됩니다.)
 
-```bash
-cp ~/.peach/dotfiles/zshrc.local.example ~/.zshrc.local
-```
-
-git 사용자 식별자(`user.name`/`user.email`)도 머신 로컬로 분리합니다(저장소 커밋 금지):
-
-```bash
-cp ~/.peach/dotfiles/gitconfig.local.example ~/.gitconfig.local
-```
-
-ops 명령의 환경 식별자(AWS 프로파일·리전·클러스터)는 `~/.peach.local.mk`에 둡니다(저장소 커밋 금지):
+단, ops 명령의 환경 식별자(AWS 프로파일·리전·클러스터)만 예외로 `~/.peach.local.mk`에 둡니다.
+추적되는 `Makefile`이 이 값을 읽어 동작하므로(직접 실행 도구라 인버전 대상이 아님), 저장소엔
+placeholder만 올리고 실제 값은 머신 로컬에 둡니다(커밋 금지):
 
 ```bash
 cp ~/.peach/peach.local.mk.example ~/.peach.local.mk
 ```
 
+## 기여 흐름 (개인 사용 ↔ 저장소 반영)
+
+이 저장소는 **2-차선**으로 운영됩니다.
+
+| 차선 | 무엇 | 게이트 |
+|------|------|--------|
+| 🏠 개인 사용 | `~/.zshrc` 등을 자유롭게 수정 | 없음 (검증 불필요) |
+| 🌐 저장소 반영 | 공유할 내용을 관리 파일(`*.shared`)에 옮겨 커밋 | pre-commit 누출 가드 |
+
+### 역할 인버전 모델
+
+개인 진입 파일이 **개인 소유(비추적)**이고, 저장소 관리 콘텐츠를 `source`/`include` 합니다:
+
+```
+~/.zshrc            ← 개인 소유. 자유 편집.
+   ├ (최상단) p10k instant-prompt
+   ├ source ~/.peach/dotfiles/zshrc.shared   ← 공유 콘텐츠(추적)
+   └ (개인 영역) 자유롭게 추가
+```
+
+같은 방식으로 `~/.gitconfig`→`gitconfig.shared`, `~/.p10k.zsh`→`p10k.zsh`,
+`~/.config/nvim/init.vim`→`config/nvim/shared.vim`.
+
+→ `~/.zshrc`를 아무리 고쳐도 저장소는 깨끗하고, 여러 머신은 `git -C ~/.peach pull`로
+공유 콘텐츠만 갱신됩니다(개인 파일 불간섭).
+
+### 공유로 올리기 (promote)
+
+공유하고 싶은 내용을 관리 파일로 옮긴 뒤 커밋합니다:
+
+```bash
+mk contrib edit zshrc        # dotfiles/zshrc.shared 를 $EDITOR로 열기
+git -C ~/.peach add -p && git -C ~/.peach commit
+```
+
+### 누출 가드 (pre-commit)
+
+커밋 시 추가된 줄에서 머신 종속 누출(홈 절대경로·드라이브 마운트·이메일·사설 IP·시크릿)을
+자동 차단합니다. `setup.sh`가 자동 활성화하며, 별도 clone에서는:
+
+```bash
+mk contrib install-hooks
+```
+
+- 한 줄만 예외 허용: 줄 끝에 `# peach-allow`
+- 의도적 우회(드묾): `git commit --no-verify`
+
 ## 운영 명령 (mk)
 
-자주 쓰는 k8s/AWS 명령은 `Makefile`에 모아두고, zsh 함수 `mk`로 **어디서나** `mk <그룹> <명령> [옵션...]` 형태로 호출합니다(`dotfiles/zshrc`에 정의).
+자주 쓰는 k8s/AWS 명령은 `Makefile`에 모아두고, zsh 함수 `mk`로 **어디서나** `mk <그룹> <명령> [옵션...]` 형태로 호출합니다(`dotfiles/zshrc.shared`에 정의).
 
 ```bash
 mk                 # 전체 명령 목록 (그룹별)
@@ -221,9 +262,10 @@ mk ctx local       # minikube(로컬)로 전환
 | `setup.sh` | 진입점 (self-clone → install/* → 검증) |
 | `lib/common.sh` | 공통 멱등 헬퍼 |
 | `install/` | 번호순 설치 모듈 (apt→ohmyzsh→p10k→plugins→binaries→docker→link→nvim→wsl_conf) |
-| `dotfiles/` | `.zshrc`, `.p10k.zsh` 등 원본 |
-| `config/nvim/` | nvim `init.vim` 원본 → `~/.config/nvim/` |
-| `Makefile` | ops 명령 카탈로그 (zsh `mk` 함수로 호출) |
+| `dotfiles/` | 관리 dotfile 원본(`zshrc.shared`·`gitconfig.shared`·`p10k.zsh`) — 개인 entry가 source |
+| `config/nvim/shared.vim` | 관리 nvim 콘텐츠 → 개인 `~/.config/nvim/init.vim`이 source |
+| `hooks/` | pre-commit 누출 가드(`core.hooksPath`로 활성, 패턴은 `hooks/lib/leak-patterns.sh`) |
+| `Makefile` | ops 명령 카탈로그 (zsh `mk` 함수로 호출, `contrib` 그룹 포함) |
 | `peach.local.mk.example` | ops 환경 식별자 템플릿 → `~/.peach.local.mk` |
 | `docker-windows-tcp/` | (선택) Windows에서 docker 사용용 로컬 TCP 스크립트 (WSL drop-in + Windows 설치기) |
 
@@ -231,6 +273,6 @@ mk ctx local       # minikube(로컬)로 전환
 
 ```bash
 sudo apt install -y shellcheck bats
-shellcheck -x lib/*.sh install/*.sh setup.sh
+shellcheck -x lib/*.sh install/*.sh setup.sh hooks/pre-commit hooks/lib/*.sh
 bats tests/
 ```
