@@ -247,13 +247,15 @@ mk contrib install-hooks
 자주 쓰는 k8s/AWS 명령은 `Makefile`에 모아두고, zsh 함수 `mk`로 **어디서나** `mk <그룹> <명령> [옵션...]` 형태로 호출합니다(`dotfiles/zshrc.shared`에 정의).
 
 ```bash
-mk                 # 전체 명령 목록 (그룹별)
-mk ctx             # ctx 그룹의 하위 명령 안내 (mk <TAB> 2단계 자동완성)
-mk ctx eks         # kubectl 컨텍스트를 AWS EKS로 전환
-mk ctx local       # minikube(로컬)로 전환
+mk                       # 전체 명령 목록 (그룹별)
+mk aws <TAB>             # aws 그룹 하위 한 단계씩 안내 (aws→eks→ng→delete 계층 드릴다운)
+mk aws eks ng delete <TAB>   # 타깃 확정 후엔 받을 인자 제안 (NAME= YES=)
+mk aws eks ng-delete NAME=ingame-ds YES=1   # 실행
 ```
 
-타깃명은 `그룹-명령`(예: `ctx-eks`)이고, `mk`가 공백 입력을 실제 타깃 목록과 대조해 `make -C ~/.peach <그룹>-<명령> [ARGS=...]`로 디스패치합니다. 환경 식별자는 위 `~/.peach.local.mk`에서 주입됩니다(저장소엔 placeholder만).
+`<TAB>` 자동완성은 **그룹→명령을 하이픈 기준으로 한 단계씩** 좁혀 주고, 타깃이 확정되면 그 타깃의 `## help`에 적힌 **인자(`NAME=`·`FILE=`·`YES=`…)를 후보로** 제시합니다(값까지: `FILE=`→파일명, `YES=`→`1`). 인자 후보는 help 텍스트 한 곳에서 파생되므로 명령을 추가하면 자동완성도 따라옵니다.
+
+타깃명은 `그룹-명령`(예: `ctx-eks`)이고, `mk`가 공백 입력을 실제 타깃 목록과 대조해 `make -C ~/.peach <그룹>-<명령> [KEY=val…] [ARGS=...]`로 디스패치합니다. 환경 식별자는 위 `~/.peach.local.mk`에서 주입됩니다(저장소엔 placeholder만).
 
 ## 구조
 

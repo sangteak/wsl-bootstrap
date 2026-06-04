@@ -180,13 +180,57 @@ mk() {
 	for a in "$@"; do [[ $a == *=* ]] && vars+=$a || words+=$a; done
 	make -C "$dir" "$target" "${vars[@]}" ${words:+"ARGS=${words[*]}"}
 }
+# 자동완성: 그룹→명령 계층 드릴다운(하이픈 기준) + 인자 완성.
+#   인자 후보는 각 타깃의 '## help' 텍스트에 적힌 KEY= 토큰에서 추출(단일 출처).
+#   값까지: FILE=<TAB>→파일명, YES=<TAB>→1.
 _mk() {
-	local dir="$HOME/.peach"
-	if (( CURRENT == 2 )); then              # 첫 칸: 그룹/1단계 명령
-		compadd ${(f)"$(awk -F'[-:]' '/^[a-zA-Z0-9_-]+:.*##/{print $1}' "$dir/Makefile" 2>/dev/null | sort -u)"}
-	elif (( CURRENT == 3 )); then            # 둘째 칸: 해당 그룹의 하위 명령
-		compadd ${(f)"$(awk -F: '/^'"$words[2]"'-[a-zA-Z0-9-]+:.*##/{sub(/^'"$words[2]"'-/,\"\",$1); print $1}' "$dir/Makefile" 2>/dev/null)"}
+	local mf="$HOME/.peach/Makefile"
+	[[ -r $mf ]] || return
+	local -a targets
+	targets=(${(f)"$(awk -F: '/^[a-zA-Z0-9_-]+:.*##/{print $1}' "$mf" 2>/dev/null)"})
+
+	# (1) 값 입력 중(KEY=<여기>) → 값 완성
+	if [[ ${words[CURRENT]} == *=* ]]; then
+		local key=${words[CURRENT]%%=*}
+		compset -P '*='
+		case $key in
+			FILE) _files ;;
+			YES)  compadd 1 ;;
+		esac
+		return
 	fi
+
+	# (2) 커서 앞 bare(= 없는) 토큰으로 타깃 해소(디스패처와 동일한 최장접두)
+	local -a prior; prior=(${words[2,CURRENT-1]})
+	local -a parts; local w
+	for w in $prior; do [[ $w == *=* ]] && break; parts+=$w; done
+	local target="" n cand
+	for (( n=${#parts}; n>=1; n-- )); do
+		cand=${(j:-:)parts[1,n]}
+		(( ${targets[(I)$cand]} )) && { target=$cand; break }
+	done
+
+	# (3) 타깃 확정 → help의 KEY= 인자 제안(이미 준 건 제외, 값은 사용자가 입력)
+	if [[ -n $target ]]; then
+		local help
+		help=$(awk -v t="$target" -F'## ' 'index($0,t":")==1{print $2; exit}' "$mf")
+		local -a keys present
+		keys=(${(f)"$(print -r -- "$help" | grep -oE '[A-Za-z_][A-Za-z0-9_]*=')"})
+		for w in $prior; do [[ $w == *=* ]] && present+=${w%%=*}=; done
+		keys=(${keys:|present})
+		(( ${#keys} )) && compadd -S '' -- ${(u)keys}
+		return
+	fi
+
+	# (4) 미확정 → 다음 한 세그먼트 드릴다운(aws → eks → ng → delete)
+	local prefix=${(j:-:)parts} t rest
+	local -a subs
+	for t in $targets; do
+		if [[ -z $prefix ]]; then subs+=${t%%-*}
+		elif [[ $t == $prefix-* ]]; then rest=${t#$prefix-}; subs+=${rest%%-*}
+		fi
+	done
+	(( ${#subs} )) && compadd -- ${(u)subs}
 }
 compdef _mk mk
 
