@@ -177,6 +177,7 @@ change-shell: ## 기본 셸을 zsh로 변경
 ##@ contrib — 저장소 기여 (mk contrib <명령>)
 contrib-install-hooks: ## 이 clone에 누출 가드(pre-commit) 활성화
 	git -C $(HOME)/.peach config core.hooksPath hooks 2>/dev/null || git config core.hooksPath hooks
+	chmod +x $(HOME)/.peach/hooks/pre-commit 2>/dev/null || true
 	@echo "core.hooksPath=hooks 설정 완료(누출 가드 활성)"
 contrib-edit: ## 관리 dotfile을 $EDITOR로 열기 (mk contrib edit [zshrc|gitconfig|p10k|nvim])
 	@target="$(ARGS)"; case "$$target" in \

@@ -38,6 +38,8 @@ source "$PEACH_DIR/lib/common.sh"
 
 # ── 2.5. pre-commit 누출 가드 활성화(per-clone 로컬 설정) ──
 if git -C "$PEACH_DIR" config core.hooksPath hooks 2>/dev/null; then
+    # 추적 모드는 755지만 x비트를 잃는 파일시스템(DrvFs 등) 대비 방어적으로 보장(없으면 훅이 조용히 무시됨)
+    chmod +x "$PEACH_DIR/hooks/pre-commit" 2>/dev/null || true
     log "core.hooksPath=hooks 설정(누출 가드 활성)"
 else
     warn "core.hooksPath 설정 실패 — 'mk contrib install-hooks'로 수동 활성화"
