@@ -12,6 +12,10 @@ AWS_PROFILE ?= default
 AWS_REGION  ?= ap-northeast-2
 EKS_CLUSTER ?= CHANGE_ME
 
+# AWS CLI v2 기본 페이저(less) 비활성화 — 짧은 테이블을 less로 열지 않고 인라인 출력.
+# recipe 환경에만 적용되며 사용자 대화형 셸엔 영향 없음. (파이프 시엔 AWS가 알아서 끔)
+export AWS_PAGER :=
+
 # 인자 변수는 mk가 명령줄(KEY=val)로 전달한다. 같은 이름의 '환경변수' 누출(예: $NAME=호스트명)은
 # make가 변수로 흡수해 가드를 무력화하므로, 환경 출처(origin=environment)인 것만 비운다.
 # (명령줄로 넘긴 값은 origin=command line 이라 보존됨)
