@@ -23,10 +23,10 @@ export AWS_PAGER :=
 # 인자 변수는 mk가 명령줄(KEY=val)로 전달한다. 같은 이름의 '환경변수' 누출(예: $NAME=호스트명)은
 # make가 변수로 흡수해 가드를 무력화하므로, 환경 출처(origin=environment)인 것만 비운다.
 # (명령줄로 넘긴 값은 origin=command line 이라 보존됨)
-ARG_VARS := NAME VPC PROTO FROM TO CIDR DESC SG FILE YES
+ARG_VARS := NAME VPC PROTO FROM TO CIDR SRC DESC SG FILE YES
 $(foreach v,$(ARG_VARS),$(if $(filter environment,$(origin $(v))),$(eval $(v) :=)))
 
-.PHONY: help ctx-eks ctx-local aws-tools aws-whoami aws-can aws-clusters aws-login change-shell contrib-install-hooks contrib-edit aws-sg-create aws-sg-authorize aws-sg-list aws-sg-delete aws-eks-describe aws-eks-nodes aws-eks-ng-list aws-eks-ng-describe aws-eks-cluster-create aws-eks-ng-create aws-eks-ng-delete aws-eks-lt-delete helm-agones helm-status
+.PHONY: help ctx-eks ctx-local aws-tools aws-whoami aws-can aws-clusters aws-login change-shell contrib-install-hooks contrib-edit aws-sg-create aws-sg-authorize aws-sg-list aws-sg-delete aws-eks-describe aws-eks-nodes aws-eks-ng-list aws-eks-ng-describe aws-eks-cluster-create aws-eks-ng-create aws-eks-lt-create aws-eks-ng-delete aws-eks-lt-delete helm-agones helm-status
 
 # ── 공통 해소(이름 기반 디스커버리, D-03=C) ──────────────────
 # VPC: 인자 VPC= 우선, 없으면 EKS_CLUSTER 의 VPC 를 describe 로 해소.
@@ -103,13 +103,31 @@ aws-sg-create: ## 생성 (NAME= [DESC=] [VPC=])
 	aws ec2 create-security-group --group-name "$(NAME)" --description "$(if $(DESC),$(DESC),$(NAME))" \
 	  --vpc-id "$$VPC" --region $(AWS_REGION) --profile $(AWS_PROFILE) --query GroupId --output text
 
-aws-sg-authorize: ## 인바운드 규칙 추가 (NAME= PROTO= FROM= TO= [CIDR=] [VPC=])
-	@test -n "$(NAME)" || { echo "NAME= 필요" >&2; exit 1; }
-	@test -n "$(PROTO)" && test -n "$(FROM)" && test -n "$(TO)" || { echo "PROTO= FROM= TO= 필요" >&2; exit 1; }
+aws-sg-authorize: ## 인바운드 규칙 추가 (NAME= PROTO= FROM= TO= [CIDR=|SRC=]; 복잡한건 FILE=JSON)
+	@test -n "$(NAME)" || { echo "NAME= 필요 (예: mk aws-sg-authorize NAME=ingame-ds-sg ...)" >&2; exit 1; }
 	$(RESOLVE_VPC)
 	$(RESOLVE_SG)
-	aws ec2 authorize-security-group-ingress --group-id "$$SG" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
-	  --ip-permissions "IpProtocol=$(PROTO),FromPort=$(FROM),ToPort=$(TO),IpRanges=[{CidrIp=$(if $(CIDR),$(CIDR),0.0.0.0/0)}]"
+	if [ -n "$(FILE)" ]; then
+	  # 복잡 규칙: --ip-permissions JSON 파일(file://). 멀티포트·멀티소스·CIDR/SG혼합·Description 등 자유.
+	  aws ec2 authorize-security-group-ingress --group-id "$$SG" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
+	    --ip-permissions "file://$(FILE)"
+	else
+	  test -n "$(PROTO)" && test -n "$(FROM)" && test -n "$(TO)" || { echo "PROTO= FROM= TO= 필요 (또는 FILE=JSON)" >&2; exit 1; }
+	  if [ -n "$(SRC)" ] && [ -n "$(CIDR)" ]; then echo "CIDR= 와 SRC= 는 동시 사용 불가(둘 중 하나)" >&2; exit 1; fi
+	  if [ -n "$(SRC)" ]; then
+	    # SRC: 소스 SG 참조(UserIdGroupPairs). sg-ID면 그대로, 이름이면 VPC에서 해소.
+	    case "$(SRC)" in
+	      sg-*) SRCID="$(SRC)" ;;
+	      *) SRCID=$$(aws ec2 describe-security-groups --filters Name=group-name,Values="$(SRC)" Name=vpc-id,Values="$$VPC" --region $(AWS_REGION) --profile $(AWS_PROFILE) --query 'SecurityGroups[0].GroupId' --output text)
+	         if [ -z "$$SRCID" ] || [ "$$SRCID" = "None" ]; then echo "SRC SG '$(SRC)' 를 VPC $$VPC 에서 찾지 못했습니다" >&2; exit 1; fi ;;
+	    esac
+	    SOURCE="UserIdGroupPairs=[{GroupId=$$SRCID}]"
+	  else
+	    SOURCE="IpRanges=[{CidrIp=$(if $(CIDR),$(CIDR),0.0.0.0/0)}]"
+	  fi
+	  aws ec2 authorize-security-group-ingress --group-id "$$SG" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
+	    --ip-permissions "IpProtocol=$(PROTO),FromPort=$(FROM),ToPort=$(TO),$$SOURCE"
+	fi
 
 aws-sg-list: ## 인바운드/아웃바운드 규칙 조회 (NAME= [VPC=])
 	@test -n "$(NAME)" || { echo "NAME= 필요" >&2; exit 1; }
@@ -152,6 +170,14 @@ aws-eks-ng-create: ## 노드그룹 생성 (FILE=ng.json; --cli-input-json)
 	@test -n "$(FILE)" || { echo "FILE= 필요 (예: mk aws eks ng-create FILE=ng.json)" >&2; exit 1; }
 	@test -f "$(FILE)" || { echo "파일 없음: $(FILE)" >&2; exit 1; }
 	aws eks create-nodegroup --cli-input-json "file://$(FILE)" --region $(AWS_REGION) --profile $(AWS_PROFILE)
+
+aws-eks-lt-create: ## 런치템플릿 생성 (NAME= FILE=lt-data.json; --launch-template-data file://)
+	@test -n "$(NAME)" || { echo "NAME= 필요 (예: mk aws-eks-lt-create NAME=ingame-lt FILE=lt-data.json)" >&2; exit 1; }
+	@test -n "$(FILE)" || { echo "FILE= 필요 (launch-template-data JSON)" >&2; exit 1; }
+	@test -f "$(FILE)" || { echo "파일 없음: $(FILE)" >&2; exit 1; }
+	aws ec2 create-launch-template --launch-template-name "$(NAME)" \
+	  --launch-template-data "file://$(FILE)" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
+	  --query 'LaunchTemplate.LaunchTemplateId' --output text
 
 aws-eks-ng-delete: ## 노드그룹 삭제 (NAME= YES=1)
 	@test -n "$(NAME)" || { echo "NAME= 필요 (예: mk aws eks ng-delete NAME=ingame-ds)" >&2; exit 1; }
