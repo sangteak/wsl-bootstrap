@@ -96,7 +96,7 @@ aws-clusters: ## AWS EKS 클러스터 목록 조회
 aws-login: ## 콘솔 로그인(브라우저 자동·자동갱신). 세션 만료 시 재실행 ('--remote' 금지)
 	aws login --profile $(AWS_PROFILE)
 
-##@ aws sg — 보안그룹 (mk aws sg <동작> NAME= …; ID는 이름으로 자동 해소)
+##@ aws sg — 보안그룹 (mk aws-sg-<동작>). NAME=엔 SG '이름'을 넣는다(sg-ID 아님) → 내부에서 ID 자동해소
 aws-sg-create: ## 생성 (NAME= [DESC=] [VPC=])
 	@test -n "$(NAME)" || { echo "NAME= 필요 (예: mk aws sg create NAME=ingame-ds-sg)" >&2; exit 1; }
 	$(RESOLVE_VPC)
