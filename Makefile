@@ -127,8 +127,8 @@ aws-eks-describe: ## 클러스터 VPC·clusterSG·endpoint 조회 (describe-clus
 	aws eks describe-cluster --name $(EKS_CLUSTER) --region $(AWS_REGION) --profile $(AWS_PROFILE) \
 	  --query 'cluster.{Name:name,Status:status,Version:version,VPC:resourcesVpcConfig.vpcId,ClusterSG:resourcesVpcConfig.clusterSecurityGroupId,Endpoint:endpoint}' --output table
 
-aws-eks-nodes: ## 노드 인벤토리(인스턴스타입·arch·cpu) — kubectl custom-columns. 상태는 'kubectl get nodes'
-	kubectl get nodes -o 'custom-columns=NODE:.metadata.name,INSTANCE:.metadata.labels.node\.kubernetes\.io/instance-type,ARCH:.metadata.labels.kubernetes\.io/arch,CPU:.status.capacity.cpu'
+aws-eks-nodes: ## 노드 목록(기본 컬럼 + 인스턴스타입·arch) — kubectl get nodes -L
+	kubectl get nodes -L node.kubernetes.io/instance-type -L kubernetes.io/arch
 
 aws-eks-ng-list: ## 노드그룹 목록·TYPE(managed/unmanaged) (eksctl)
 	@if [ "$(EKS_CLUSTER)" = "CHANGE_ME" ]; then echo "EKS_CLUSTER 미설정 (~/.peach.local.mk)" >&2; exit 1; fi
