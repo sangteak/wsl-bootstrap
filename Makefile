@@ -23,7 +23,7 @@ export AWS_PAGER :=
 # 인자 변수는 mk가 명령줄(KEY=val)로 전달한다. 같은 이름의 '환경변수' 누출(예: $NAME=호스트명)은
 # make가 변수로 흡수해 가드를 무력화하므로, 환경 출처(origin=environment)인 것만 비운다.
 # (명령줄로 넘긴 값은 origin=command line 이라 보존됨)
-ARG_VARS := NAME VPC PROTO FROM TO CIDR SRC DESC SG FILE YES
+ARG_VARS := NAME VPC PROTO FROM TO CIDR SRC DESC SG FILE YES SEL
 $(foreach v,$(ARG_VARS),$(if $(filter environment,$(origin $(v))),$(eval $(v) :=)))
 
 .PHONY: help ctx-eks ctx-local aws-tools aws-whoami aws-can aws-clusters aws-login change-shell contrib-install-hooks contrib-edit aws-sg-create aws-sg-authorize aws-sg-list aws-sg-delete aws-eks-describe aws-eks-nodes aws-eks-ng-list aws-eks-ng-describe aws-eks-cluster-create aws-eks-ng-create aws-eks-lt-create aws-eks-ng-delete aws-eks-lt-delete helm-agones helm-status
@@ -150,8 +150,8 @@ aws-eks-describe: ## 클러스터 VPC·clusterSG·endpoint 조회 (describe-clus
 	aws eks describe-cluster --name $(EKS_CLUSTER) --region $(AWS_REGION) --profile $(AWS_PROFILE) \
 	  --query 'cluster.{Name:name,Status:status,Version:version,VPC:resourcesVpcConfig.vpcId,ClusterSG:resourcesVpcConfig.clusterSecurityGroupId,Endpoint:endpoint}' --output table
 
-aws-eks-nodes: ## 노드 목록(기본 컬럼 + 인스턴스타입·arch) — kubectl get nodes -L
-	kubectl get nodes -L node.kubernetes.io/instance-type -L kubernetes.io/arch
+aws-eks-nodes: ## 노드 목록(기본+인스턴스타입·arch). 라벨필터 SEL=<셀렉터>(role 등)
+	kubectl get nodes $(if $(SEL),-l $(SEL),) -L node.kubernetes.io/instance-type -L kubernetes.io/arch
 
 aws-eks-ng-list: ## 노드그룹 목록·TYPE(managed/unmanaged) (eksctl)
 	@if [ "$(EKS_CLUSTER)" = "CHANGE_ME" ]; then echo "EKS_CLUSTER 미설정 (~/.peach.local.mk)" >&2; exit 1; fi
