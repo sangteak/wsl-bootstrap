@@ -171,7 +171,7 @@ aws-eks-ng-create: ## 노드그룹 생성 (FILE=ng.json; --cli-input-json)
 	@test -f "$(FILE)" || { echo "파일 없음: $(FILE)" >&2; exit 1; }
 	aws eks create-nodegroup --cli-input-json "file://$(FILE)" --region $(AWS_REGION) --profile $(AWS_PROFILE)
 
-aws-eks-lt-create: ## 런치템플릿 생성 (NAME= FILE=lt-data.json; --launch-template-data file://)
+aws-eks-lt-create: ## 런치템플릿 생성 (NAME= FILE=JSON; 형식 예시: examples/lt-data.json)
 	@test -n "$(NAME)" || { echo "NAME= 필요 (예: mk aws-eks-lt-create NAME=ingame-lt FILE=lt-data.json)" >&2; exit 1; }
 	@test -n "$(FILE)" || { echo "FILE= 필요 (launch-template-data JSON)" >&2; exit 1; }
 	@test -f "$(FILE)" || { echo "파일 없음: $(FILE)" >&2; exit 1; }

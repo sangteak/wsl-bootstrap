@@ -1,0 +1,4 @@
+{
+  "SecurityGroupIds": ["sg-<클러스터SG>", "sg-<커스텀SG-예: ingame-ds-sg>"],
+  "UserData": "<base64(AL2023 NodeConfig) — 핀닝 설정. README 참고>"
+}
