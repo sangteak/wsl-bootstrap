@@ -22,7 +22,7 @@ export AWS_PAGER :=
 ARG_VARS := NAME VPC PROTO FROM TO CIDR DESC SG FILE YES
 $(foreach v,$(ARG_VARS),$(if $(filter environment,$(origin $(v))),$(eval $(v) :=)))
 
-.PHONY: help ctx-eks ctx-local aws-tools aws-whoami aws-can aws-clusters change-shell contrib-install-hooks contrib-edit aws-sg-create aws-sg-authorize aws-sg-list aws-sg-delete aws-eks-describe aws-eks-nodes aws-eks-ng-list aws-eks-ng-describe aws-eks-cluster-create aws-eks-ng-create aws-eks-ng-delete aws-eks-lt-delete
+.PHONY: help ctx-eks ctx-local aws-tools aws-whoami aws-can aws-clusters aws-login change-shell contrib-install-hooks contrib-edit aws-sg-create aws-sg-authorize aws-sg-list aws-sg-delete aws-eks-describe aws-eks-nodes aws-eks-ng-list aws-eks-ng-describe aws-eks-cluster-create aws-eks-ng-create aws-eks-ng-delete aws-eks-lt-delete
 
 # ── 공통 해소(이름 기반 디스커버리, D-03=C) ──────────────────
 # VPC: 인자 VPC= 우선, 없으면 EKS_CLUSTER 의 VPC 를 describe 로 해소.
@@ -88,6 +88,9 @@ aws-can: ## EKS 생성 액션 허용 여부 시뮬레이션 (mk aws can [PRINCIP
 
 aws-clusters: ## AWS EKS 클러스터 목록 조회
 	aws eks list-clusters --region $(AWS_REGION) --profile $(AWS_PROFILE)
+
+aws-login: ## 콘솔 로그인(브라우저 자동·자동갱신). 세션 만료 시 재실행 ('--remote' 금지)
+	aws login --profile $(AWS_PROFILE)
 
 ##@ aws sg — 보안그룹 (mk aws sg <동작> NAME= …; ID는 이름으로 자동 해소)
 aws-sg-create: ## 생성 (NAME= [DESC=] [VPC=])

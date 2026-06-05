@@ -239,4 +239,8 @@ source ~/powerlevel10k/powerlevel10k.zsh-theme
 # docker: systemd(WSL)가 데몬을 관리하고 기본 유닉스 소켓을 쓰므로 별도 env 설정 불필요.
 # (과거 DOCKER_HOST=tcp://...:2375 우회는 systemd 도입으로 제거)
 
+# WSL: 'aws login'·xdg-open 등이 브라우저를 열 때 Windows 기본 브라우저로(복붙 없이 콜백 자동 완료).
+# wslu 패키지의 wslview. 설치돼 있을 때만 설정(미설치 환경에서 BROWSER 오염 방지).
+command -v wslview >/dev/null && export BROWSER=wslview
+
 export PATH=$(go env GOPATH)/bin:"$HOME/.local/bin:$PATH"
