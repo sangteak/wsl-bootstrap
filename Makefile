@@ -209,11 +209,15 @@ aws-eks-lt-delete: ## 런치템플릿 삭제 (NAME= YES=1)
 	echo "✅ 삭제됨: launch-template '$(NAME)'"
 
 ##@ helm — 클러스터 차트 (mk helm-<차트>; upgrade --install 으로 멱등)
-helm-agones: ## Agones 설치/업그레이드 (agones-system, 컨트롤러 대기). 버전=AGONES_VERSION(미지정 시 최신)
+helm-agones: ## Agones 설치/업그레이드 (사이드카 Guaranteed화→핀닝 가능). 버전=AGONES_VERSION
 	helm repo add agones https://agones.dev/chart/stable
 	helm repo update agones
+	# SDK 사이드카를 requests==limits로 → GameServer Pod이 Guaranteed QoS가 될 수 있어야 CPU 핀닝됨.
+	# (기본값은 cpuLimit=0/memory=0 이라 사이드카가 Burstable → Pod이 Guaranteed 불가 → 핀닝 안 됨)
 	helm upgrade --install agones agones/agones \
 	  --namespace agones-system --create-namespace \
+	  --set agones.image.sdk.cpuRequest=30m  --set agones.image.sdk.cpuLimit=30m \
+	  --set agones.image.sdk.memoryRequest=64Mi --set agones.image.sdk.memoryLimit=64Mi \
 	  $(if $(AGONES_VERSION),--version $(AGONES_VERSION),)
 	kubectl -n agones-system rollout status deploy/agones-controller --timeout=5m
 
