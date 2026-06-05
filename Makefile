@@ -11,6 +11,8 @@ SHELL := bash
 AWS_PROFILE ?= default
 AWS_REGION  ?= ap-northeast-2
 EKS_CLUSTER ?= CHANGE_ME
+# ng-describe 등에서 NAME= 생략 시 기본 노드그룹(local.mk에서 override). 인라인 주석 금지(값에 공백 섞임).
+EKS_NG      ?= general
 
 # AWS CLI v2 기본 페이저(less) 비활성화 — 짧은 테이블을 less로 열지 않고 인라인 출력.
 # recipe 환경에만 적용되며 사용자 대화형 셸엔 영향 없음. (파이프 시엔 AWS가 알아서 끔)
@@ -134,10 +136,9 @@ aws-eks-ng-list: ## 노드그룹 목록·TYPE(managed/unmanaged) (eksctl)
 	@if [ "$(EKS_CLUSTER)" = "CHANGE_ME" ]; then echo "EKS_CLUSTER 미설정 (~/.peach.local.mk)" >&2; exit 1; fi
 	AWS_PROFILE=$(AWS_PROFILE) eksctl get nodegroup --cluster $(EKS_CLUSTER) --region $(AWS_REGION)
 
-aws-eks-ng-describe: ## 노드그룹 role·subnets 조회 (NAME=)
-	@test -n "$(NAME)" || { echo "NAME= 필요 (예: mk aws eks ng-describe NAME=general)" >&2; exit 1; }
+aws-eks-ng-describe: ## 노드그룹 role·subnets 조회 (NAME= 생략 시 EKS_NG=general)
 	@if [ "$(EKS_CLUSTER)" = "CHANGE_ME" ]; then echo "EKS_CLUSTER 미설정 (~/.peach.local.mk)" >&2; exit 1; fi
-	aws eks describe-nodegroup --cluster-name $(EKS_CLUSTER) --nodegroup-name "$(NAME)" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
+	aws eks describe-nodegroup --cluster-name $(EKS_CLUSTER) --nodegroup-name "$(if $(NAME),$(NAME),$(EKS_NG))" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
 	  --query 'nodegroup.{Role:nodeRole,Subnets:subnets,Status:status,Type:nodegroupType}' --output table
 
 aws-eks-cluster-create: ## 클러스터 생성 (FILE=cluster.yaml; eksctl -f)
