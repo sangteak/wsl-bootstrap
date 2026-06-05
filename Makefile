@@ -127,7 +127,7 @@ aws-eks-describe: ## 클러스터 VPC·clusterSG·endpoint 조회 (describe-clus
 	aws eks describe-cluster --name $(EKS_CLUSTER) --region $(AWS_REGION) --profile $(AWS_PROFILE) \
 	  --query 'cluster.{Name:name,Status:status,Version:version,VPC:resourcesVpcConfig.vpcId,ClusterSG:resourcesVpcConfig.clusterSecurityGroupId,Endpoint:endpoint}' --output table
 
-aws-eks-nodes: ## 노드 목록: 인스턴스타입·arch·cpu (kubectl get nodes)
+aws-eks-nodes: ## 노드 인벤토리(인스턴스타입·arch·cpu) — kubectl custom-columns. 상태는 'kubectl get nodes'
 	kubectl get nodes -o 'custom-columns=NODE:.metadata.name,INSTANCE:.metadata.labels.node\.kubernetes\.io/instance-type,ARCH:.metadata.labels.kubernetes\.io/arch,CPU:.status.capacity.cpu'
 
 aws-eks-ng-list: ## 노드그룹 목록·TYPE(managed/unmanaged) (eksctl)
