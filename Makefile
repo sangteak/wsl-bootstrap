@@ -129,10 +129,11 @@ aws-sg-authorize: ## 인바운드 규칙 추가 (NAME= PROTO= FROM= TO= [CIDR=|S
 	    --ip-permissions "IpProtocol=$(PROTO),FromPort=$(FROM),ToPort=$(TO),$$SOURCE"
 	fi
 
-aws-sg-list: ## 인바운드/아웃바운드 규칙 조회 (NAME= [VPC=])
+aws-sg-list: ## SG ID + 인바운드/아웃바운드 규칙 조회 (NAME= [VPC=])
 	@test -n "$(NAME)" || { echo "NAME= 필요" >&2; exit 1; }
 	$(RESOLVE_VPC)
 	$(RESOLVE_SG)
+	echo "SG: $$SG  ($(NAME) @ $$VPC)"
 	aws ec2 describe-security-group-rules --filters Name=group-id,Values="$$SG" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
 	  --query 'SecurityGroupRules[].{Id:SecurityGroupRuleId,Egress:IsEgress,Proto:IpProtocol,From:FromPort,To:ToPort,CIDR:CidrIpv4,SrcSG:ReferencedGroupInfo.GroupId}' --output table
 
