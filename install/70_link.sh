@@ -34,4 +34,7 @@ ensure_managed_entry "$HOME/.p10k.zsh" "$p10k_header"
 log "70_link: ~/.p10k.zsh entry 보장(인버전)"
 
 mkdir -p "$HOME/.local/bin"
+# WSL 브라우저 오프너(bin/wsl-open)를 PATH(~/.local/bin)에 링크 → zshrc.shared가 BROWSER로 사용
+ln -sfn "$PEACH/bin/wsl-open" "$HOME/.local/bin/wsl-open"
+log "70_link: ~/.local/bin/wsl-open 링크(WSL 브라우저 오프너)"
 log "70_link: 완료"

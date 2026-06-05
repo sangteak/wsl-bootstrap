@@ -240,7 +240,7 @@ source ~/powerlevel10k/powerlevel10k.zsh-theme
 # (과거 DOCKER_HOST=tcp://...:2375 우회는 systemd 도입으로 제거)
 
 # WSL: 'aws login'·xdg-open 등이 브라우저를 열 때 Windows 기본 브라우저로(복붙 없이 콜백 자동 완료).
-# wslu 패키지의 wslview. 설치돼 있을 때만 설정(미설치 환경에서 BROWSER 오염 방지).
-command -v wslview >/dev/null && export BROWSER=wslview
+# bin/wsl-open(=explorer.exe 래퍼). 최신 WSL은 interop을 WSLInterop-late로 등록 → wslu 3.2.3는 오판하므로 미사용.
+[[ -n ${WSL_DISTRO_NAME-} ]] && command -v wsl-open >/dev/null && export BROWSER=wsl-open
 
 export PATH=$(go env GOPATH)/bin:"$HOME/.local/bin:$PATH"

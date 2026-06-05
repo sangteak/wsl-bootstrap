@@ -11,13 +11,12 @@ ensure_apt \
     git curl wget unzip \
     eza bat fd-find jq \
     build-essential make \
-    universal-ctags \
-    wslu
+    universal-ctags
 
 # Ubuntu에서 bat 바이너리는 batcat 이름으로 설치됨 → .zshrc alias(cat=batcat)와 일치
 # universal-ctags: nvim tagbar 의존, build-essential: treesitter :TSUpdate 의존
 # make: 이 저장소의 핵심 도구 mk(Makefile)의 직접 의존성 — build-essential에 포함되나 명시
-# wslu: wslview 제공 → WSL에서 'aws login' 등이 Windows 기본 브라우저를 자동으로 열게(BROWSER=wslview)
+# (WSL 브라우저 자동열기는 bin/wsl-open + 70_link 링크로 처리. wslu 3.2.3은 WSLInterop-late 미지원이라 미사용)
 
 # ── nodejs/npm (nvim coc.nvim 의존) ────────────────────
 # '명령 존재'로 판정한다. NodeSource/nvm 등으로 이미 node/npm이 있으면 재사용.
