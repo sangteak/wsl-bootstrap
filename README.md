@@ -244,18 +244,18 @@ mk contrib install-hooks
 
 ## 운영 명령 (mk)
 
-자주 쓰는 k8s/AWS 명령은 `Makefile`에 모아두고, zsh 함수 `mk`로 **어디서나** `mk <그룹> <명령> [옵션...]` 형태로 호출합니다(`dotfiles/zshrc.shared`에 정의).
+자주 쓰는 k8s/AWS 명령은 `Makefile`에 모아두고, zsh 함수 `mk`로 **어디서나** `mk <타깃> [KEY=val...]` 형태로 호출합니다(`dotfiles/zshrc.shared`에 정의). 타깃명은 `make help`에 나오는 **풀네임 그대로**(예: `aws-eks-ng-delete`)입니다.
 
 ```bash
-mk                       # 전체 명령 목록 (그룹별)
-mk aws <TAB>             # aws 그룹 하위 한 단계씩 안내 (aws→eks→ng→delete 계층 드릴다운)
-mk aws eks ng delete <TAB>   # 타깃 확정 후엔 받을 인자 제안 (NAME= YES=)
-mk aws eks ng-delete NAME=ingame-ds YES=1   # 실행
+mk                       # 전체 명령 목록 (= make help)
+mk aws<TAB>              # aws-* 명령을 설명과 함께 한 번에 노출
+mk aws-eks-ng-delete<TAB>    # 타깃 뒤엔 받을 인자 제안 (NAME= YES=)
+mk aws-eks-ng-delete NAME=ingame-ds YES=1   # 실행
 ```
 
-`<TAB>` 자동완성은 **그룹→명령을 하이픈 기준으로 한 단계씩** 좁혀 주고, 타깃이 확정되면 그 타깃의 `## help`에 적힌 **인자(`NAME=`·`FILE=`·`YES=`…)를 후보로** 제시합니다(값까지: `FILE=`→파일명, `YES=`→`1`). 인자 후보는 help 텍스트 한 곳에서 파생되므로 명령을 추가하면 자동완성도 따라옵니다.
+`<TAB>` 자동완성은 **help와 동일한 풀네임**을 각 명령의 `## help` 설명과 함께(`_describe`) 보여 주고, 타깃이 확정되면 그 `## help`에 적힌 **인자(`NAME=`·`FILE=`·`YES=`…)를 후보로** 제시합니다(값까지: `FILE=`→파일명, `YES=`→`1`). 후보·설명·인자가 모두 help 텍스트 한 곳에서 파생되므로 명령을 추가하면 자동완성도 따라옵니다.
 
-타깃명은 `그룹-명령`(예: `ctx-eks`)이고, `mk`가 공백 입력을 실제 타깃 목록과 대조해 `make -C ~/.peach <그룹>-<명령> [KEY=val…] [ARGS=...]`로 디스패치합니다. 환경 식별자는 위 `~/.peach.local.mk`에서 주입됩니다(저장소엔 placeholder만).
+`mk`는 입력 토큰을 실제 타깃 목록과 대조해 `make -C ~/.peach <타깃> [KEY=val…] [ARGS=...]`로 디스패치합니다(공백 형식 `mk aws eks ng delete`도 관용으로 받지만, 정본은 하이픈 풀네임). 환경 식별자는 위 `~/.peach.local.mk`에서 주입됩니다(저장소엔 placeholder만).
 
 ## 구조
 

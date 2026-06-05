@@ -148,9 +148,10 @@ klog() {
     kubectl logs pod/"$1" -n "$2"
 }
 
-# peach: ~/.peach/Makefile 의 ops 명령을 어디서나 'mk <그룹> <명령> [옵션...]' 으로 실행.
-#   mk            → 전체 목록    mk ctx → 그룹 안내    mk ctx eks → 실행
-#   타깃명은 group-verb(예: ctx-eks). 래퍼가 공백 입력을 실제 타깃 목록과 대조해 디스패치.
+# peach: ~/.peach/Makefile 의 ops 명령을 어디서나 'mk <타깃> [KEY=val...]' 으로 실행.
+#   타깃명은 help와 동일한 풀네임(예: aws-eks-ng-delete). <TAB>으로 설명과 함께 완성.
+#   mk aws<TAB> → aws-* 전부 노출 / mk aws-sg-create<TAB> → 인자(NAME= …)
+#   공백 형식(mk aws sg create)도 관용으로 디스패치되지만, 정본은 하이픈 풀네임.
 mk() {
 	local dir="$HOME/.peach"
 	local -a targets
@@ -170,7 +171,7 @@ mk() {
 		for t in $targets; do [[ $t == $prefix-* ]] && grp+=$t; done
 		if (( ${#grp} )); then
 			print -P "%F{cyan}${(j: :)parts}%f 하위:"
-			for t in $grp; do print "  mk ${t//-/ }"; done
+			for t in $grp; do print "  mk $t"; done
 			return
 		fi
 		echo "mk: 알 수 없는 명령 '$*'" >&2; make -C "$dir"; return 1
@@ -180,9 +181,9 @@ mk() {
 	for a in "$@"; do [[ $a == *=* ]] && vars+=$a || words+=$a; done
 	make -C "$dir" "$target" "${vars[@]}" ${words:+"ARGS=${words[*]}"}
 }
-# 자동완성: 그룹→명령 계층 드릴다운(하이픈 기준) + 인자 완성.
-#   인자 후보는 각 타깃의 '## help' 텍스트에 적힌 KEY= 토큰에서 추출(단일 출처).
-#   값까지: FILE=<TAB>→파일명, YES=<TAB>→1.
+# 자동완성: help와 동일한 풀네임 후보 + 설명(_describe)을 메뉴에 함께 표시.
+#   타깃 뒤에선 그 타깃의 인자(KEY=)를, 값까지(FILE=<TAB>→파일명, YES=<TAB>→1).
+#   후보·설명·인자 모두 Makefile의 '이름: ## 설명 (KEY=)' 한 줄에서 파생(단일 출처).
 _mk() {
 	local mf="$HOME/.peach/Makefile"
 	[[ -r $mf ]] || return
@@ -222,15 +223,11 @@ _mk() {
 		return
 	fi
 
-	# (4) 미확정 → 다음 한 세그먼트 드릴다운(aws → eks → ng → delete)
-	local prefix=${(j:-:)parts} t rest
-	local -a subs
-	for t in $targets; do
-		if [[ -z $prefix ]]; then subs+=${t%%-*}
-		elif [[ $t == $prefix-* ]]; then rest=${t#$prefix-}; subs+=${rest%%-*}
-		fi
-	done
-	(( ${#subs} )) && compadd -- ${(u)subs}
+	# (4) 타깃 미정 → 풀네임(help와 동일) + 설명을 _describe로. 줄엔 콜론 앞 이름만 들어감.
+	#     Makefile에서 '이름:설명'을 만들어 zsh가 현재 단어 접두로 필터링한다.
+	local -a descs
+	descs=(${(f)"$(awk -F'## ' '/^[a-zA-Z0-9_-]+:.*##/{name=$1; sub(/:.*/,"",name); print name ":" $2}' "$mf" 2>/dev/null)"})
+	_describe 'mk 명령' descs
 }
 compdef _mk mk
 
