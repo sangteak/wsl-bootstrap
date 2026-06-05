@@ -13,6 +13,8 @@ AWS_REGION  ?= ap-northeast-2
 EKS_CLUSTER ?= CHANGE_ME
 # ng-describe 등에서 NAME= 생략 시 기본 노드그룹(local.mk에서 override). 인라인 주석 금지(값에 공백 섞임).
 EKS_NG      ?= general
+# Agones helm 차트 버전 핀. 비우면 최신. local.mk에서 'AGONES_VERSION := 1.43.0' 식으로 override.
+AGONES_VERSION ?=
 
 # AWS CLI v2 기본 페이저(less) 비활성화 — 짧은 테이블을 less로 열지 않고 인라인 출력.
 # recipe 환경에만 적용되며 사용자 대화형 셸엔 영향 없음. (파이프 시엔 AWS가 알아서 끔)
@@ -24,7 +26,7 @@ export AWS_PAGER :=
 ARG_VARS := NAME VPC PROTO FROM TO CIDR DESC SG FILE YES
 $(foreach v,$(ARG_VARS),$(if $(filter environment,$(origin $(v))),$(eval $(v) :=)))
 
-.PHONY: help ctx-eks ctx-local aws-tools aws-whoami aws-can aws-clusters aws-login change-shell contrib-install-hooks contrib-edit aws-sg-create aws-sg-authorize aws-sg-list aws-sg-delete aws-eks-describe aws-eks-nodes aws-eks-ng-list aws-eks-ng-describe aws-eks-cluster-create aws-eks-ng-create aws-eks-ng-delete aws-eks-lt-delete
+.PHONY: help ctx-eks ctx-local aws-tools aws-whoami aws-can aws-clusters aws-login change-shell contrib-install-hooks contrib-edit aws-sg-create aws-sg-authorize aws-sg-list aws-sg-delete aws-eks-describe aws-eks-nodes aws-eks-ng-list aws-eks-ng-describe aws-eks-cluster-create aws-eks-ng-create aws-eks-ng-delete aws-eks-lt-delete helm-agones helm-status
 
 # ── 공통 해소(이름 기반 디스커버리, D-03=C) ──────────────────
 # VPC: 인자 VPC= 우선, 없으면 EKS_CLUSTER 의 VPC 를 describe 로 해소.
@@ -178,6 +180,18 @@ aws-eks-lt-delete: ## 런치템플릿 삭제 (NAME= YES=1)
 	aws ec2 delete-launch-template --launch-template-name "$(NAME)" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
 	  --query 'LaunchTemplate.LaunchTemplateId' --output text
 	echo "✅ 삭제됨: launch-template '$(NAME)'"
+
+##@ helm — 클러스터 차트 (mk helm-<차트>; upgrade --install 으로 멱등)
+helm-agones: ## Agones 설치/업그레이드 (agones-system, 컨트롤러 대기). 버전=AGONES_VERSION(미지정 시 최신)
+	helm repo add agones https://agones.dev/chart/stable
+	helm repo update agones
+	helm upgrade --install agones agones/agones \
+	  --namespace agones-system --create-namespace \
+	  $(if $(AGONES_VERSION),--version $(AGONES_VERSION),)
+	kubectl -n agones-system rollout status deploy/agones-controller --timeout=5m
+
+helm-status: ## 설치된 helm 릴리스 목록 (helm list -A)
+	helm list -A
 
 change-shell: ## 기본 셸을 zsh로 변경
 	sudo chsh -s "$$(which zsh)" "$$USER"
