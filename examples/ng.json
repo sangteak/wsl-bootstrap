@@ -1,0 +1,12 @@
+{
+  "clusterName": "my-eks-cluster",
+  "nodegroupName": "ingame-ds",
+  "nodeRole": "<NODE_ROLE ARN — mk aws-eks-ng-describe NAME=general 의 Role>",
+  "subnets": ["<subnet-1>", "<subnet-2>"],
+  "launchTemplate": { "id": "<LT id — lt-create 출력>", "version": "$Latest" },
+  "amiType": "AL2023_x86_64_STANDARD",
+  "instanceTypes": ["c5.2xlarge"],
+  "scalingConfig": { "minSize": 1, "maxSize": 5, "desiredSize": 2 },
+  "labels": { "role": "ingame" },
+  "taints": [ { "key": "dedicated", "value": "ingame", "effect": "NO_SCHEDULE" } ]
+}

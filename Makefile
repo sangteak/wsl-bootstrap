@@ -103,7 +103,7 @@ aws-sg-create: ## 생성 (NAME= [DESC=] [VPC=])
 	aws ec2 create-security-group --group-name "$(NAME)" --description "$(if $(DESC),$(DESC),$(NAME))" \
 	  --vpc-id "$$VPC" --region $(AWS_REGION) --profile $(AWS_PROFILE) --query GroupId --output text
 
-aws-sg-authorize: ## 인바운드 규칙 추가 (NAME= PROTO= FROM= TO= [CIDR=|SRC=]; 복잡한건 FILE=JSON)
+aws-sg-authorize: ## 인바운드 규칙 추가 (NAME= PROTO= FROM= TO= [CIDR=|SRC=]; 복잡:FILE=JSON 예시 examples/sg-rules.json)
 	@test -n "$(NAME)" || { echo "NAME= 필요 (예: mk aws-sg-authorize NAME=ingame-ds-sg ...)" >&2; exit 1; }
 	$(RESOLVE_VPC)
 	$(RESOLVE_SG)
@@ -162,12 +162,12 @@ aws-eks-ng-describe: ## 노드그룹 role·subnets 조회 (NAME= 생략 시 EKS_
 	aws eks describe-nodegroup --cluster-name $(EKS_CLUSTER) --nodegroup-name "$(if $(NAME),$(NAME),$(EKS_NG))" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
 	  --query 'nodegroup.{Role:nodeRole,Subnets:subnets,Status:status,Type:nodegroupType}' --output table
 
-aws-eks-cluster-create: ## 클러스터 생성 (FILE=cluster.yaml; eksctl -f)
+aws-eks-cluster-create: ## 클러스터 생성 (FILE=YAML; 형식 예시: examples/cluster.yaml)
 	@test -n "$(FILE)" || { echo "FILE= 필요 (예: mk aws eks cluster-create FILE=cluster.yaml)" >&2; exit 1; }
 	@test -f "$(FILE)" || { echo "파일 없음: $(FILE)" >&2; exit 1; }
 	AWS_PROFILE=$(AWS_PROFILE) eksctl create cluster -f "$(FILE)"
 
-aws-eks-ng-create: ## 노드그룹 생성 (FILE=ng.json; --cli-input-json)
+aws-eks-ng-create: ## 노드그룹 생성 (FILE=JSON; 형식 예시: examples/ng.json)
 	@test -n "$(FILE)" || { echo "FILE= 필요 (예: mk aws eks ng-create FILE=ng.json)" >&2; exit 1; }
 	@test -f "$(FILE)" || { echo "파일 없음: $(FILE)" >&2; exit 1; }
 	aws eks create-nodegroup --cli-input-json "file://$(FILE)" --region $(AWS_REGION) --profile $(AWS_PROFILE)

@@ -1,0 +1,18 @@
+[
+  {
+    "IpProtocol": "tcp",
+    "FromPort": 8080,
+    "ToPort": 8080,
+    "UserIdGroupPairs": [
+      { "GroupId": "sg-<출발지SG>", "Description": "from ALB only" }
+    ]
+  },
+  {
+    "IpProtocol": "udp",
+    "FromPort": 7000,
+    "ToPort": 8000,
+    "IpRanges": [
+      { "CidrIp": "0.0.0.0/0", "Description": "players (public)" }
+    ]
+  }
+]
