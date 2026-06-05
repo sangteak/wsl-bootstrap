@@ -23,10 +23,10 @@ export AWS_PAGER :=
 # 인자 변수는 mk가 명령줄(KEY=val)로 전달한다. 같은 이름의 '환경변수' 누출(예: $NAME=호스트명)은
 # make가 변수로 흡수해 가드를 무력화하므로, 환경 출처(origin=environment)인 것만 비운다.
 # (명령줄로 넘긴 값은 origin=command line 이라 보존됨)
-ARG_VARS := NAME VPC PROTO FROM TO CIDR SRC DESC SG FILE YES SEL
+ARG_VARS := NAME VPC PROTO FROM TO CIDR SRC DESC SG FILE YES SEL VER
 $(foreach v,$(ARG_VARS),$(if $(filter environment,$(origin $(v))),$(eval $(v) :=)))
 
-.PHONY: help ctx-eks ctx-local aws-tools aws-whoami aws-can aws-clusters aws-login change-shell contrib-install-hooks contrib-edit aws-sg-create aws-sg-authorize aws-sg-list aws-sg-delete aws-eks-describe aws-eks-nodes aws-eks-ng-list aws-eks-ng-describe aws-eks-cluster-create aws-eks-ng-create aws-eks-lt-create aws-eks-ng-delete aws-eks-lt-delete helm-agones helm-status
+.PHONY: help ctx-eks ctx-local aws-tools aws-whoami aws-can aws-clusters aws-login change-shell contrib-install-hooks contrib-edit aws-sg-create aws-sg-authorize aws-sg-list aws-sg-delete aws-eks-describe aws-eks-nodes aws-eks-ng-list aws-eks-ng-describe aws-eks-cluster-create aws-eks-ng-create aws-eks-lt-list aws-eks-lt-describe aws-eks-lt-create aws-eks-ng-delete aws-eks-lt-delete helm-agones helm-status
 
 # ── 공통 해소(이름 기반 디스커버리, D-03=C) ──────────────────
 # VPC: 인자 VPC= 우선, 없으면 EKS_CLUSTER 의 VPC 를 describe 로 해소.
@@ -148,7 +148,7 @@ aws-sg-delete: ## 삭제 (NAME= [VPC=])
 aws-eks-describe: ## 클러스터 VPC·clusterSG·endpoint 조회 (describe-cluster)
 	@if [ "$(EKS_CLUSTER)" = "CHANGE_ME" ]; then echo "EKS_CLUSTER 미설정 (~/.peach.local.mk)" >&2; exit 1; fi
 	aws eks describe-cluster --name $(EKS_CLUSTER) --region $(AWS_REGION) --profile $(AWS_PROFILE) \
-	  --query 'cluster.{Name:name,Status:status,Version:version,VPC:resourcesVpcConfig.vpcId,ClusterSG:resourcesVpcConfig.clusterSecurityGroupId,Endpoint:endpoint}' --output table
+		--query 'cluster.{Name:name,Status:status,Version:version,VPC:resourcesVpcConfig.vpcId,ClusterSG:resourcesVpcConfig.clusterSecurityGroupId,Endpoint:endpoint}' --output table
 
 aws-eks-nodes: ## 노드 목록(기본+인스턴스타입·arch). 라벨필터 SEL=<셀렉터>(role 등)
 	kubectl get nodes $(if $(SEL),-l $(SEL),) -L node.kubernetes.io/instance-type -L kubernetes.io/arch
@@ -160,7 +160,7 @@ aws-eks-ng-list: ## 노드그룹 목록·TYPE(managed/unmanaged) (eksctl)
 aws-eks-ng-describe: ## 노드그룹 role·subnets 조회 (NAME= 생략 시 EKS_NG=general)
 	@if [ "$(EKS_CLUSTER)" = "CHANGE_ME" ]; then echo "EKS_CLUSTER 미설정 (~/.peach.local.mk)" >&2; exit 1; fi
 	aws eks describe-nodegroup --cluster-name $(EKS_CLUSTER) --nodegroup-name "$(if $(NAME),$(NAME),$(EKS_NG))" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
-	  --query 'nodegroup.{Role:nodeRole,Subnets:subnets,Status:status,Type:nodegroupType}' --output table
+		--query 'nodegroup.{Role:nodeRole,Subnets:subnets,Status:status,Type:nodegroupType,lt:launchTemplate}' --output table
 
 aws-eks-cluster-create: ## 클러스터 생성 (FILE=YAML; 형식 예시: examples/cluster.yaml)
 	@test -n "$(FILE)" || { echo "FILE= 필요 (예: mk aws eks cluster-create FILE=cluster.yaml)" >&2; exit 1; }
@@ -171,6 +171,16 @@ aws-eks-ng-create: ## 노드그룹 생성 (FILE=JSON; 형식 예시: examples/ng
 	@test -n "$(FILE)" || { echo "FILE= 필요 (예: mk aws eks ng-create FILE=ng.json)" >&2; exit 1; }
 	@test -f "$(FILE)" || { echo "파일 없음: $(FILE)" >&2; exit 1; }
 	aws eks create-nodegroup --cli-input-json "file://$(FILE)" --region $(AWS_REGION) --profile $(AWS_PROFILE)
+
+aws-eks-lt-list: ## 런치템플릿 목록 (이름·ID·기본/최신 버전)
+	aws ec2 describe-launch-templates --region $(AWS_REGION) --profile $(AWS_PROFILE) \
+	  --query 'LaunchTemplates[].{Name:LaunchTemplateName,Id:LaunchTemplateId,Default:DefaultVersionNumber,Latest:LatestVersionNumber}' --output table
+
+aws-eks-lt-describe: ## 런치템플릿 데이터 상세 — SG·UserData 등 (NAME= 필요, VER= 생략 시 최신 버전)
+	@test -n "$(NAME)" || { echo "NAME= 필요 (예: mk aws-eks-lt-describe NAME=ingame-lt)" >&2; exit 1; }
+	aws ec2 describe-launch-template-versions --launch-template-name "$(NAME)" --versions '$(if $(VER),$(VER),$$Latest)' \
+	  --region $(AWS_REGION) --profile $(AWS_PROFILE) \
+	  --query 'LaunchTemplateVersions[].{Ver:VersionNumber,Default:DefaultVersion,Data:LaunchTemplateData}' --output json
 
 aws-eks-lt-create: ## 런치템플릿 생성 (NAME= FILE=JSON; 형식 예시: examples/lt-data.json)
 	@test -n "$(NAME)" || { echo "NAME= 필요 (예: mk aws-eks-lt-create NAME=ingame-lt FILE=lt-data.json)" >&2; exit 1; }
