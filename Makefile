@@ -23,10 +23,10 @@ export AWS_PAGER :=
 # 인자 변수는 mk가 명령줄(KEY=val)로 전달한다. 같은 이름의 '환경변수' 누출(예: $NAME=호스트명)은
 # make가 변수로 흡수해 가드를 무력화하므로, 환경 출처(origin=environment)인 것만 비운다.
 # (명령줄로 넘긴 값은 origin=command line 이라 보존됨)
-ARG_VARS := NAME VPC PROTO FROM TO CIDR SRC DESC SG FILE YES SEL VER
+ARG_VARS := NAME VPC PROTO FROM TO CIDR SRC DESC SG FILE CONFIRM SEL VER
 $(foreach v,$(ARG_VARS),$(if $(filter environment,$(origin $(v))),$(eval $(v) :=)))
 
-.PHONY: help ctx-eks ctx-local aws-tools aws-whoami aws-can aws-clusters aws-login change-shell contrib-install-hooks contrib-edit aws-sg-create aws-sg-authorize aws-sg-list aws-sg-delete aws-eks-describe aws-eks-nodes aws-eks-ng-list aws-eks-ng-describe aws-eks-cluster-create aws-eks-ng-create aws-eks-lt-list aws-eks-lt-describe aws-eks-lt-create aws-eks-ng-delete aws-eks-lt-delete helm-agones helm-status
+.PHONY: help ctx-eks ctx-local aws-tools aws-whoami aws-can aws-clusters aws-login change-shell contrib-install-hooks contrib-edit aws-sg-create aws-sg-authorize aws-sg-list aws-sg-delete aws-eks-describe aws-eks-nodes aws-eks-ng-list aws-eks-ng-describe aws-eks-cluster-create aws-eks-ng-create aws-eks-lt-list aws-eks-lt-describe aws-eks-lt-create aws-eks-ng-delete aws-eks-lt-delete aws-eks-cluster-delete helm-agones helm-status
 
 # ── 공통 해소(이름 기반 디스커버리, D-03=C) ──────────────────
 # VPC: 인자 VPC= 우선, 없으면 EKS_CLUSTER 의 VPC 를 describe 로 해소.
@@ -41,6 +41,14 @@ endef
 define RESOLVE_SG
 SG=$$(aws ec2 describe-security-groups --filters Name=group-name,Values="$(NAME)" Name=vpc-id,Values="$$VPC" --region $(AWS_REGION) --profile $(AWS_PROFILE) --query 'SecurityGroups[0].GroupId' --output text)
 if [ -z "$$SG" ] || [ "$$SG" = "None" ]; then echo "SG '$(NAME)' 를 VPC $$VPC 에서 찾지 못했습니다" >&2; exit 1; fi
+endef
+# 삭제 확인(타이핑): 대화형이면 이름 직접 입력, 비대화면 CONFIRM=<이름> 일치 요구.
+# YES=1 식 습관 입력을 막으려 '정확한 이름'을 강제한다. $(1)=확인할 이름.
+define CONFIRM_DELETE
+if [ -n "$(CONFIRM)" ]; then _ANS="$(CONFIRM)"
+elif [ -e /dev/tty ]; then read -r -p "삭제하려면 '$(1)' 을 그대로 입력하세요: " _ANS < /dev/tty
+else echo "비대화 환경 — 자동화 시 CONFIRM=$(1) 을 추가하세요" >&2; exit 1; fi
+if [ "$$_ANS" != "$(1)" ]; then echo "❌ 입력('$$_ANS')이 '$(1)' 과 일치하지 않습니다 — 중단" >&2; exit 1; fi
 endef
 
 help: ## 이 명령 목록 출력
@@ -129,22 +137,33 @@ aws-sg-authorize: ## 인바운드 규칙 추가 (NAME= PROTO= FROM= TO= [CIDR=|S
 	    --ip-permissions "IpProtocol=$(PROTO),FromPort=$(FROM),ToPort=$(TO),$$SOURCE"
 	fi
 
-aws-sg-list: ## SG ID + 인바운드/아웃바운드 규칙 조회 (NAME= [VPC=])
+aws-sg-list: ## NAME= 면 규칙 상세, 생략하면 VPC 전체 SG 목록(이름·ID·설명) [VPC=]
+	@$(RESOLVE_VPC)
+	if [ -z "$(NAME)" ]; then
+	  echo "VPC $$VPC 의 SG 목록 (NAME= 으로 규칙 상세 조회):" >&2
+	  aws ec2 describe-security-groups --filters Name=vpc-id,Values="$$VPC" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
+	    --query 'sort_by(SecurityGroups,&GroupName)[].{Name:GroupName,Id:GroupId,Desc:Description}' --output table
+	else
+	  $(RESOLVE_SG)
+	  echo "SG: $$SG  ($(NAME) @ $$VPC)"
+	  aws ec2 describe-security-group-rules --filters Name=group-id,Values="$$SG" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
+	    --query 'SecurityGroupRules[].{Id:SecurityGroupRuleId,Egress:IsEgress,Proto:IpProtocol,From:FromPort,To:ToPort,CIDR:CidrIpv4,SrcSG:ReferencedGroupInfo.GroupId}' --output table
+	fi
+
+aws-sg-delete: ## SG 삭제 (NAME= [VPC=]; 대화형 이름확인, 자동화는 CONFIRM=<NAME>)
 	@test -n "$(NAME)" || { echo "NAME= 필요" >&2; exit 1; }
 	$(RESOLVE_VPC)
 	$(RESOLVE_SG)
-	echo "SG: $$SG  ($(NAME) @ $$VPC)"
+	echo "▼ 삭제 대상 SG: $$SG  ($(NAME) @ $$VPC)" >&2
 	aws ec2 describe-security-group-rules --filters Name=group-id,Values="$$SG" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
-	  --query 'SecurityGroupRules[].{Id:SecurityGroupRuleId,Egress:IsEgress,Proto:IpProtocol,From:FromPort,To:ToPort,CIDR:CidrIpv4,SrcSG:ReferencedGroupInfo.GroupId}' --output table
-
-aws-sg-delete: ## 삭제 (NAME= [VPC=])
-	@test -n "$(NAME)" || { echo "NAME= 필요" >&2; exit 1; }
-	$(RESOLVE_VPC)
-	$(RESOLVE_SG)
+	  --query 'SecurityGroupRules[].{Id:SecurityGroupRuleId,Egress:IsEgress,Proto:IpProtocol,From:FromPort,To:ToPort,CIDR:CidrIpv4,SrcSG:ReferencedGroupInfo.GroupId}' --output table >&2
+	echo "" >&2
+	echo "⚠️  이 SG를 삭제합니다. 다른 리소스가 참조 중이면 AWS가 거부(DependencyViolation)합니다." >&2
+	$(call CONFIRM_DELETE,$(NAME))
 	aws ec2 delete-security-group --group-id "$$SG" --region $(AWS_REGION) --profile $(AWS_PROFILE)
-	echo "deleted SG '$(NAME)' ($$SG)"
+	echo "✅ 삭제됨: SG '$(NAME)' ($$SG)"
 
-##@ aws eks — 클러스터·노드그룹 라이프사이클 (mk aws eks <명령>; 삭제는 YES=1 확인)
+##@ aws eks — 클러스터·노드그룹 라이프사이클 (mk aws eks <명령>; 삭제는 이름 타이핑 확인)
 aws-eks-describe: ## 클러스터 VPC·clusterSG·endpoint 조회 (describe-cluster)
 	@if [ "$(EKS_CLUSTER)" = "CHANGE_ME" ]; then echo "EKS_CLUSTER 미설정 (~/.peach.local.mk)" >&2; exit 1; fi
 	aws eks describe-cluster --name $(EKS_CLUSTER) --region $(AWS_REGION) --profile $(AWS_PROFILE) \
@@ -190,33 +209,46 @@ aws-eks-lt-create: ## 런치템플릿 생성 (NAME= FILE=JSON; 형식 예시: ex
 	  --launch-template-data "file://$(FILE)" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
 	  --query 'LaunchTemplate.LaunchTemplateId' --output text
 
-aws-eks-ng-delete: ## 노드그룹 삭제 (NAME= YES=1)
+aws-eks-ng-delete: ## 노드그룹 삭제 (NAME=; 대화형 이름확인, 자동화는 CONFIRM=<NAME>)
 	@test -n "$(NAME)" || { echo "NAME= 필요 (예: mk aws eks ng-delete NAME=ingame-ds)" >&2; exit 1; }
 	@if [ "$(EKS_CLUSTER)" = "CHANGE_ME" ]; then echo "EKS_CLUSTER 미설정 (~/.peach.local.mk)" >&2; exit 1; fi
 	echo "▼ 삭제 대상 (cluster=$(EKS_CLUSTER)):" >&2
 	aws eks describe-nodegroup --cluster-name $(EKS_CLUSTER) --nodegroup-name "$(NAME)" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
 	  --query 'nodegroup.{NG:nodegroupName,Status:status,Type:nodegroupType,Desired:scalingConfig.desiredSize,Min:scalingConfig.minSize,Max:scalingConfig.maxSize}' --output table
-	if [ "$(YES)" != "1" ]; then
-	  echo "" >&2
-	  echo "⚠️  이 노드그룹을 삭제하면 해당 노드의 진행 중 매치가 모두 종료됩니다." >&2
-	  echo "    확인하려면 YES=1 을 추가하세요:  mk aws eks ng-delete NAME=$(NAME) YES=1" >&2
-	  exit 1
-	fi
+	echo "" >&2
+	echo "⚠️  이 노드그룹을 삭제하면 해당 노드의 진행 중 매치가 모두 종료됩니다." >&2
+	$(call CONFIRM_DELETE,$(NAME))
 	aws eks delete-nodegroup --cluster-name $(EKS_CLUSTER) --nodegroup-name "$(NAME)" --region $(AWS_REGION) --profile $(AWS_PROFILE)
 	echo "✅ 삭제 요청됨: nodegroup '$(NAME)' (비동기 — mk aws eks ng-list 로 진행 확인)"
 
-aws-eks-lt-delete: ## 런치템플릿 삭제 (NAME= YES=1)
+aws-eks-lt-delete: ## 런치템플릿 삭제 (NAME=; 대화형 이름확인, 자동화는 CONFIRM=<NAME>)
 	@test -n "$(NAME)" || { echo "NAME= 필요 (예: mk aws eks lt-delete NAME=ingame-lt)" >&2; exit 1; }
 	echo "▼ 삭제 대상:" >&2
 	aws ec2 describe-launch-templates --launch-template-names "$(NAME)" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
 	  --query 'LaunchTemplates[0].{Name:LaunchTemplateName,Id:LaunchTemplateId,Default:DefaultVersionNumber,Latest:LatestVersionNumber}' --output table
-	if [ "$(YES)" != "1" ]; then
-	  echo "    확인하려면 YES=1 을 추가하세요:  mk aws eks lt-delete NAME=$(NAME) YES=1" >&2
-	  exit 1
-	fi
+	$(call CONFIRM_DELETE,$(NAME))
 	aws ec2 delete-launch-template --launch-template-name "$(NAME)" --region $(AWS_REGION) --profile $(AWS_PROFILE) \
 	  --query 'LaunchTemplate.LaunchTemplateId' --output text
 	echo "✅ 삭제됨: launch-template '$(NAME)'"
+
+aws-eks-cluster-delete: ## 클러스터 전체 삭제 — 노드그룹·CFN 스택 모두 (대화형 이름확인; 자동화는 CONFIRM=<클러스터명>)
+	@CL="$(EKS_CLUSTER)"
+	if [ -z "$$CL" ] || [ "$$CL" = "CHANGE_ME" ]; then echo "EKS_CLUSTER 미설정 (~/.peach.local.mk)" >&2; exit 1; fi
+	echo "▼ 삭제 대상 클러스터: $$CL  (region=$(AWS_REGION))" >&2
+	echo "  포함 노드그룹:" >&2
+	AWS_PROFILE=$(AWS_PROFILE) eksctl get nodegroup --cluster "$$CL" --region $(AWS_REGION) || true
+	# 현재성 교차검증: kubectl 컨텍스트가 가리키는 클러스터 ≠ 타깃이면 경고(차단 아님)
+	KCTX=$$(kubectl config view --minify -o jsonpath='{.clusters[0].name}' 2>/dev/null || true)
+	case "$$KCTX" in
+	  "$$CL"|*/"$$CL") : ;;
+	  "") echo "ℹ️  kubectl 컨텍스트를 확인할 수 없습니다(미설정?). 클러스터명 기준으로 진행합니다." >&2 ;;
+	  *) echo "⚠️  현재 kubectl 컨텍스트는 '$$KCTX' 로, 삭제 타깃 '$$CL' 과 다릅니다. 타깃 기준으로 진행합니다." >&2 ;;
+	esac
+	echo "" >&2
+	echo "🛑  클러스터 전체(모든 노드그룹·워크로드·CloudFormation 스택)가 영구 삭제됩니다. 비가역!" >&2
+	$(call CONFIRM_DELETE,$$CL)
+	AWS_PROFILE=$(AWS_PROFILE) eksctl delete cluster --name "$$CL" --region $(AWS_REGION)
+	echo "✅ 삭제 완료: cluster '$$CL'"
 
 ##@ helm — 클러스터 차트 (mk helm-<차트>; upgrade --install 으로 멱등)
 helm-agones: ## Agones 설치/업그레이드 (사이드카 Guaranteed화→핀닝 가능). 버전=AGONES_VERSION

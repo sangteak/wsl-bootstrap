@@ -188,7 +188,7 @@ mk() {
 	make -C "$dir" "$target" "${vars[@]}" ${words:+"ARGS=${words[*]}"}
 }
 # 자동완성: help와 동일한 풀네임 후보 + 설명(_describe)을 메뉴에 함께 표시.
-#   타깃 뒤에선 그 타깃의 인자(KEY=)를, 값까지(FILE=<TAB>→파일명, YES=<TAB>→1).
+#   타깃 뒤에선 그 타깃의 인자(KEY=)를, 값까지(FILE=<TAB>→파일명). CONFIRM=은 이름 직접 입력.
 #   후보·설명·인자 모두 Makefile의 '이름: ## 설명 (KEY=)' 한 줄에서 파생(단일 출처).
 _mk() {
 	local mf="$HOME/.peach/Makefile"
@@ -202,8 +202,8 @@ _mk() {
 		compset -P '*='
 		case $key in
 			FILE) _files ;;
-			YES)  compadd 1 ;;
 		esac
+		# CONFIRM=은 의도적으로 값 완성을 두지 않음(삭제 확인 — 이름을 직접 타이핑하게).
 		return
 	fi
 
