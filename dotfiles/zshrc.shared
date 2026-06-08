@@ -145,7 +145,7 @@ kexec() {
 }
 
 klog() {
-    kubectl logs pod/"$1" -n "$2"
+    kubectl logs -f pod/"$1" -n "$2"
 }
 
 # peach: ~/.peach/Makefile 의 ops 명령을 어디서나 'mk <타깃> [KEY=val...]' 으로 실행.
