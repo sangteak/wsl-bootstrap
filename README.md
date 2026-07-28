@@ -136,6 +136,20 @@ AI 창 등과 나란히 쓰기 위한 분할/포커스 이동/리사이즈 키�
 > ⚠️ TCP는 반드시 `127.0.0.1`에만 바인딩합니다. `0.0.0.0`/WSL IP는 인증 없는 root 동급
 > 노출이라 피합니다. 루프백이면 로컬 호스트만 접근합니다.
 
+### 0) Windows: docker CLI 설치 (최초 1회)
+
+**엔진(dockerd)은 WSL에 있으므로 Windows엔 CLI만 있으면 됩니다. Docker Desktop은 필요 없습니다.**
+
+**2단계 설치기가 CLI 유무를 검사해, 없으면 설치할지 물어봅니다.** 거기서 `Y`를 누르면 이 단계는
+건너뛰어도 됩니다. 미리 깔고 싶다면:
+
+```powershell
+winget install Docker.DockerCLI
+```
+
+winget의 `Docker.DockerCLI`는 **portable(zip) 설치**라 관리자 권한이 필요 없고, PATH 등록도
+winget이 처리합니다(`%LOCALAPPDATA%\Microsoft\WinGet\Links`). 새 터미널에서 `docker --version` 으로 확인.
+
 ### 1) WSL: 로컬 TCP 활성화 + Windows 헬퍼 복사
 
 ```bash
@@ -158,7 +172,10 @@ powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.peach-win\install-wi
 
 이 설치기가:
 - 로그온 트리거 작업 스케줄러 `WSL Docker Autostart` 등록(`.peach-win\start-wsl-docker.vbs` → WSL을 깨워 docker/TCP 준비)
-- 사용자 환경변수 `DOCKER_HOST=tcp://localhost:2375` 설정
+- 사용자 환경변수 `DOCKER_HOST=tcp://127.0.0.1:2375` 설정
+  (`localhost`는 Windows에서 `::1`(IPv6)로 먼저 풀리는데 dockerd는 IPv4에만 리슨 → **IPv4로 고정**)
+- Windows `docker.exe` 존재 확인 → 없으면 **winget으로 설치할지 질문**(거절 시 명령만 안내)
+- `127.0.0.1:2375` TCP 연결 + `docker version`(엔진 응답) 검증 → 실패 시 원인별 조치 안내
 
 → **새 터미널**을 열고 `docker ps` (환경변수는 새 프로세스부터 적용)
 
@@ -167,10 +184,10 @@ powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.peach-win\install-wi
 ```
 로그인 → 작업 스케줄러 → start-wsl-docker.vbs → .cmd → wsl … true (WSL 깨움)
        → systemd → dockerd(127.0.0.1:2375)
-Windows docker.exe/VSCode → DOCKER_HOST=tcp://localhost:2375 → (mirrored 공유 루프백) → WSL
+Windows docker.exe/VSCode → DOCKER_HOST=tcp://127.0.0.1:2375 → (mirrored 공유 루프백) → WSL
 ```
 
-> - `localhost`가 WSL에 안 닿으면 `%USERPROFILE%\.wslconfig` 에 `[wsl2]` / `networkingMode=mirrored` 추가.
+> - `127.0.0.1`이 WSL에 안 닿으면 `%USERPROFILE%\.wslconfig` 에 `[wsl2]` / `networkingMode=mirrored` 추가.
 > - 옛 dockerd 시작 작업(예: `start-dockerd-in-wsl.bat`, `netsh portproxy`)이 있으면 **비활성화/삭제**합니다(systemd 설정과 충돌).
 
 ### 재현성 (다른 PC / WSL 초기화)
@@ -178,6 +195,7 @@ Windows docker.exe/VSCode → DOCKER_HOST=tcp://localhost:2375 → (mirrored 공
 | 구성 | 위치 | 재현 방법 |
 |------|------|-----------|
 | 헬퍼 스크립트 4종 | 저장소 `docker-windows-tcp/` | `git clone`에 포함(별도 작업 없음) |
+| Windows docker CLI | Windows | **2)** 설치기가 없으면 질문 후 설치 (또는 **0)** 수동) |
 | WSL drop-in | WSL ext4 | **1)** 재실행 |
 | Windows 작업·`DOCKER_HOST`·`.peach-win` | Windows | **2)** 재실행 |
 
