@@ -136,7 +136,7 @@ AI 창 등과 나란히 쓰기 위한 분할/포커스 이동/리사이즈 키�
 > ⚠️ TCP는 반드시 `127.0.0.1`에만 바인딩합니다. `0.0.0.0`/WSL IP는 인증 없는 root 동급
 > 노출이라 피합니다. 루프백이면 로컬 호스트만 접근합니다.
 
-### 0) Windows: docker CLI 설치 (최초 1회)
+### 0) Windows: docker CLI 설치 (선택 — 2단계가 대신 물어봄)
 
 **엔진(dockerd)은 WSL에 있으므로 Windows엔 CLI만 있으면 됩니다. Docker Desktop은 필요 없습니다.**
 
