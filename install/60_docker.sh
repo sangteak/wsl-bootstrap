@@ -46,6 +46,10 @@ fi
 # 클린 머신 최초 실행 시 90_wsl_conf가 wsl.conf만 쓰고 systemd는 아직 미활성일 수 있다.
 # 그 경우 'wsl --shutdown' 후 재진입 → setup.sh 재실행하면 이 블록이 데몬을 등록한다.
 if [ -d /run/systemd/system ]; then
+    # 이전 실행이 start-limit-hit(재시작 폭주)로 실패한 상태면 enable --now도 즉시 실패한다.
+    # (예: docker-windows-tcp 드롭인이 잡고 있던 2375를 옛 프로세스가 물고 있던 경우)
+    # 실패 카운터를 먼저 리셋해 멱등 재실행이 막히지 않게 한다.
+    sudo systemctl reset-failed docker 2>/dev/null || true
     sudo systemctl enable --now docker
     log "docker: systemd 등록 완료(WSL 부팅 시 자동 시작)"
 else

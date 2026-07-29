@@ -1,36 +1,71 @@
-﻿# [Windows] WSL docker 로컬-TCP 자동 시작 등록기.
-#   - 로그온 트리거 작업 스케줄러 등록(같은 폴더의 start-wsl-docker.vbs → WSL을 깨워 docker/TCP 준비)
+# [Windows] WSL docker 로컬-TCP(2375) Windows측 설치기 — 포트프록시 + 자동 시작.
+#   - (관리자) netsh 포트프록시 127.0.0.1:2375 -> WSL eth0:2375 즉시 설정
+#   - (관리자) 로그온 트리거 작업 'WSL Docker Portproxy' 등록
+#       (refresh-docker-portproxy.ps1: WSL 깨움 + eth0 IP 재감지 + 프록시 재설정)
 #   - 사용자 환경변수 DOCKER_HOST=tcp://127.0.0.1:2375 설정
 #   - Windows docker CLI(docker.exe) 유무 확인 → 없으면 winget으로 설치할지 질문
 #   - 127.0.0.1:2375 연결 + docker version 으로 최종 검증
-# 복사는 WSL 쪽 setup-docker-localtcp.sh 가 이미 이 파일들을 %USERPROFILE%\.peach-win 에 넣어둔다.
+# 복사는 WSL 쪽 setup-docker-localtcp.sh 가 이 파일들을 %USERPROFILE%\.peach-win 에 넣어둔다.
 #
-# 실행(관리자 불필요, 모든 PC 공통):
+# 실행(**관리자 PowerShell 필요** — 포트프록시가 netsh 관리자 권한을 요구):
 #   powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.peach-win\install-windows.ps1"
+#
+# 왜 포트프록시인가: WSL2 NAT 모드에선 Windows localhost 포워딩이 2375를 안 넘겨주는 PC가 있다.
+#   dockerd를 0.0.0.0:2375(NAT에선 eth0=호스트 전용, LAN 격리)로 열고 Windows는 포트프록시로 연결한다.
+#   mirrored 네트워킹을 쓰면 포트프록시 없이 127.0.0.1로 직접 되지만(그땐 dockerd도 127.0.0.1로 되돌릴 것),
+#   NAT 기본 환경에서 확실히 동작하는 쪽을 기본값으로 한다.  (README "Docker를 Windows에서 사용" 참고)
 
 $ErrorActionPreference = 'Stop'
 
-$here = $PSScriptRoot
-$vbs  = Join-Path $here 'start-wsl-docker.vbs'
+$here    = $PSScriptRoot
+$refresh = Join-Path $here 'refresh-docker-portproxy.ps1'
 
-if (-not (Test-Path $vbs)) {
-    Write-Error "start-wsl-docker.vbs 가 $here 에 없습니다. WSL에서 setup-docker-localtcp.sh 를 먼저 실행하세요(헬퍼를 여기로 복사함)."
+# 관리자 확인 — netsh 포트프록시와 highest 권한 작업 등록에 필요.
+$admin = ([Security.Principal.WindowsPrincipal] `
+    [Security.Principal.WindowsIdentity]::GetCurrent()
+).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $admin) {
+    Write-Error "관리자 PowerShell에서 실행하세요 (포트프록시 설정에 관리자 권한 필요)."
+    exit 1
+}
+if (-not (Test-Path $refresh)) {
+    Write-Error "refresh-docker-portproxy.ps1 가 $here 에 없습니다. WSL에서 setup-docker-localtcp.sh 를 먼저 실행하세요(헬퍼를 여기로 복사함)."
     exit 1
 }
 
-schtasks /create /tn "WSL Docker Autostart" /tr "wscript.exe `"$vbs`"" /sc onlogon /f | Out-Null
-Write-Host "[1/4] 작업 스케줄러 등록(onlogon): WSL Docker Autostart -> $vbs"
+# 레거시 wake 작업 정리 — 이제 포트프록시 작업이 WSL을 깨우므로 불필요(중복 방지).
+foreach ($legacy in @("WSL Docker Autostart", "Start Docker Core")) {
+    schtasks /query /tn "$legacy" 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        schtasks /delete /tn "$legacy" /f | Out-Null
+        Write-Host "      레거시 작업 제거: $legacy"
+    }
+}
 
+# [1/5] 포트프록시 즉시 설정 (WSL 깨움 + eth0 IP 재감지 + netsh)
+Write-Host "[1/5] 포트프록시 설정: 127.0.0.1:2375 -> WSL eth0:2375"
+& powershell.exe -ExecutionPolicy Bypass -File $refresh
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "포트프록시 설정 실패. 위 메시지를 확인하세요."
+    exit 1
+}
+
+# [2/5] 로그온 작업 등록 — WSL IP가 부팅마다 바뀌므로 매 로그온 프록시를 재설정한다.
+$tr = "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$refresh`""
+schtasks /create /tn "WSL Docker Portproxy" /tr $tr /sc onlogon /rl highest /f | Out-Null
+Write-Host "[2/5] 작업 스케줄러 등록(onlogon, 관리자): WSL Docker Portproxy -> $refresh"
+
+# [3/5] 접속값
 [Environment]::SetEnvironmentVariable('DOCKER_HOST', 'tcp://127.0.0.1:2375', 'User')
-Write-Host "[2/4] 사용자 환경변수 DOCKER_HOST=tcp://127.0.0.1:2375 설정"
+Write-Host "[3/5] 사용자 환경변수 DOCKER_HOST=tcp://127.0.0.1:2375 설정"
 Write-Host "      (localhost는 Windows에서 ::1(IPv6)로 먼저 풀리는데 dockerd는 IPv4만 리슨 -> IPv4 고정)"
 
 # 엔진은 WSL에 있으므로 Windows엔 CLI(docker.exe)만 있으면 된다. Docker Desktop 불필요.
 $docker = Get-Command docker.exe -ErrorAction SilentlyContinue
 if ($docker) {
-    Write-Host "[3/4] Windows docker CLI 확인: $($docker.Source)"
+    Write-Host "[4/5] Windows docker CLI 확인: $($docker.Source)"
 } else {
-    Write-Host "[3/4] Windows docker CLI 없음" -ForegroundColor Yellow
+    Write-Host "[4/5] Windows docker CLI 없음" -ForegroundColor Yellow
     Write-Host "      (엔진은 WSL에 있으므로 Docker Desktop은 필요 없습니다. CLI만 있으면 됩니다)"
     $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
 
@@ -58,7 +93,7 @@ if ($docker) {
             Write-Host "        winget install Docker.DockerCLI" -ForegroundColor Yellow
         } else {
             # winget portable은 %LOCALAPPDATA%\Microsoft\WinGet\Links 에 링크를 만들고 사용자 PATH를 갱신한다.
-            # PATH 갱신은 새 프로세스부터라, 아래 [4/4] 검증을 위해 사용자 PATH를 현재 세션에 덧붙인다.
+            # PATH 갱신은 새 프로세스부터라, 아래 [5/5] 검증을 위해 사용자 PATH를 현재 세션에 덧붙인다.
             # (통째 교체하면 호출자가 이 세션에서 임시로 추가해둔 항목이 사라진다)
             $env:PATH = $env:PATH + ';' + [Environment]::GetEnvironmentVariable('PATH', 'User')
             $docker = Get-Command docker.exe -ErrorAction SilentlyContinue
@@ -73,17 +108,9 @@ if ($docker) {
     }
 }
 
-Write-Host "[4/4] 연결 검증 (127.0.0.1:2375)"
+Write-Host "[5/5] 연결 검증 (127.0.0.1:2375)"
 
-# 2단계만 재실행하는 경우 WSL이 꺼져 있을 수 있다. 자동 시작 작업과 같은 방식으로 한 번 깨운다.
-# (안 깨우면 설정이 멀쩡한데도 '연결 실패'로 잘못 보고된다)
-if (Get-Command wsl.exe -ErrorAction SilentlyContinue) {
-    $prevEap = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    & wsl.exe -e true 2>&1 | Out-Null
-    $ErrorActionPreference = $prevEap
-}
-
+# [1/5]에서 refresh가 WSL을 이미 깨웠지만, 방금 깬 경우 systemd가 dockerd를 올릴 시간이 필요하다.
 function Test-DockerTcp {
     $client = $null
     try {
@@ -101,7 +128,7 @@ function Test-DockerTcp {
     }
 }
 
-# 방금 깨운 WSL이면 systemd가 dockerd를 올릴 시간이 필요하다. 최대 ~10초 재시도.
+# 최대 ~10초 재시도.
 $tcpOk = $false
 foreach ($attempt in 1..5) {
     $tcpOk = Test-DockerTcp
@@ -110,10 +137,10 @@ foreach ($attempt in 1..5) {
 }
 
 if (-not $tcpOk) {
-    Write-Host "      TCP 연결 실패 -- WSL이 아직 안 떠 있거나 1단계가 미적용일 수 있습니다." -ForegroundColor Yellow
-    Write-Host "        1) wsl -e true          (WSL 깨우고 재시도)" -ForegroundColor Yellow
-    Write-Host "        2) WSL에서: systemctl is-active docker / ss -tlnp | grep 2375" -ForegroundColor Yellow
-    Write-Host "        3) 그래도 안 되면 %USERPROFILE%\.wslconfig 에 [wsl2] / networkingMode=mirrored" -ForegroundColor Yellow
+    Write-Host "      TCP 연결 실패 -- WSL이 아직 안 떠 있거나 WSL측 설정이 미적용일 수 있습니다." -ForegroundColor Yellow
+    Write-Host "        1) WSL에서: systemctl is-active docker / ss -tlnp | grep 2375  (0.0.0.0:2375 여야 함)" -ForegroundColor Yellow
+    Write-Host "        2) WSL에서 setup-docker-localtcp.sh 재실행(드롭인 0.0.0.0:2375 적용)" -ForegroundColor Yellow
+    Write-Host "        3) netsh interface portproxy show all  (127.0.0.1:2375 -> WSL IP 규칙 확인)" -ForegroundColor Yellow
 } elseif (-not $docker) {
     Write-Host "      TCP 연결 OK (엔진 응답 확인은 docker CLI 설치 후 가능)"
 } else {
@@ -138,5 +165,6 @@ if (-not $tcpOk) {
 Write-Host ""
 Write-Host "완료. '새' 터미널을 열고(환경변수는 새 프로세스부터 적용) 확인:  docker ps"
 Write-Host "메모:"
-Write-Host "  - 127.0.0.1이 WSL에 안 닿으면 %USERPROFILE%\.wslconfig 에 [wsl2] / networkingMode=mirrored 추가."
-Write-Host "  - 옛 dockerd 시작 작업(예: start-dockerd-in-wsl.bat)이 있으면 비활성화/삭제하세요."
+Write-Host "  - WSL IP는 부팅마다 바뀌지만, 로그온 작업 'WSL Docker Portproxy'가 매번 프록시를 재설정합니다."
+Write-Host "  - 포트프록시 없이 쓰려면 %USERPROFILE%\.wslconfig 에 [wsl2] / networkingMode=mirrored 후"
+Write-Host "    WSL 드롭인을 127.0.0.1:2375 로 되돌리세요 (mirrored에서 0.0.0.0은 LAN 노출)."

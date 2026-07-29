@@ -130,11 +130,16 @@ AI 창 등과 나란히 쓰기 위한 분할/포커스 이동/리사이즈 키�
 ## Docker를 Windows에서 사용 — 로컬 TCP + 자동 시작 (선택)
 
 `setup.sh`는 docker를 **WSL 네이티브(systemd + 유닉스 소켓)**로만 구성합니다. Windows의
-`docker.exe`/VSCode에서 같은 엔진을 쓰려면 **로컬 루프백 TCP**를 엽니다. 필요한 스크립트는
-저장소 `docker-windows-tcp/` 에 동봉돼 있어 **어느 PC에서나 동일한 절차**로 재현됩니다.
+`docker.exe`/VSCode에서 같은 엔진을 쓰려면 **TCP 2375**를 열고, Windows는 **netsh 포트프록시**로
+WSL에 연결합니다. 필요한 스크립트는 저장소 `docker-windows-tcp/` 에 동봉돼 있어 **어느 PC에서나
+동일한 절차**로 재현됩니다.
 
-> ⚠️ TCP는 반드시 `127.0.0.1`에만 바인딩합니다. `0.0.0.0`/WSL IP는 인증 없는 root 동급
-> 노출이라 피합니다. 루프백이면 로컬 호스트만 접근합니다.
+> ⚠️ **보안(0.0.0.0 vs 127.0.0.1).** dockerd 2375는 무인증(root 동급)이라 노출 범위가 중요합니다.
+> - **기본(NAT 모드):** WSL 드롭인은 `0.0.0.0:2375`로 엽니다. NAT에선 WSL eth0가 **이 PC의 Windows
+>   호스트에서만** 닿고 LAN엔 격리되므로 실질 host-only입니다. Windows는 포트프록시
+>   `127.0.0.1:2375 → WSL eth0`로 붙습니다. (NAT에서 localhost 포워딩이 2375를 안 넘겨주는 PC 대응)
+> - **mirrored 모드로 바꾸면** WSL이 호스트 네트워크를 공유하므로 `0.0.0.0`은 **진짜 LAN 노출**이 됩니다.
+>   이땐 반드시 드롭인을 `127.0.0.1:2375`로 되돌리고, 포트프록시 없이 localhost로 직접 붙습니다.
 
 ### 0) Windows: docker CLI 설치 (선택 — 2단계가 대신 물어봄)
 
@@ -157,21 +162,23 @@ bash ~/.peach/docker-windows-tcp/setup-docker-localtcp.sh
 ```
 
 (sudo 불필요 — 필요한 부분만 내부에서 sudo 호출) 이 스크립트가:
-- systemd docker에 `tcp://127.0.0.1:2375`를 추가하는 **drop-in**(`override.conf`) 생성 → 레거시 dockerd 정리 → docker 재기동 → 검증
-- Windows 헬퍼(`.cmd`/`.vbs`/`.ps1`)를 **`%USERPROFILE%\.peach-win`** 로 복사
+- systemd docker에 `tcp://0.0.0.0:2375`를 추가하는 **drop-in**(`override.conf`) 생성 → 레거시 dockerd 정리 → docker 재기동 → 검증
+- Windows 헬퍼(`install-windows.ps1` · `refresh-docker-portproxy.ps1`)를 **`%USERPROFILE%\.peach-win`** 로 복사
 
 → 멱등이라 WSL 초기화 후 재실행도 안전. WSL 내부 CLI는 유닉스 소켓을 쓰므로 `DOCKER_HOST`를 설정하지 않습니다.
 
 ### 2) Windows: 자동 시작 + 접속값 설치
 
-**Windows PowerShell**에서 (관리자 불필요, **모든 PC 동일 — 경로 수정 불요**):
+**Windows 관리자 PowerShell**에서 (**모든 PC 동일 — 경로 수정 불요**; 포트프록시에 관리자 권한 필요):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.peach-win\install-windows.ps1"
 ```
 
 이 설치기가:
-- 로그온 트리거 작업 스케줄러 `WSL Docker Autostart` 등록(`.peach-win\start-wsl-docker.vbs` → WSL을 깨워 docker/TCP 준비)
+- netsh 포트프록시 `127.0.0.1:2375 → WSL eth0:2375` 즉시 설정
+- 로그온 트리거 작업 스케줄러 `WSL Docker Portproxy` 등록 — WSL IP는 부팅마다 바뀌므로 매 로그온
+  `refresh-docker-portproxy.ps1`이 WSL을 깨우고 eth0 IP를 재감지해 프록시를 재설정
 - 사용자 환경변수 `DOCKER_HOST=tcp://127.0.0.1:2375` 설정
   (`localhost`는 Windows에서 `::1`(IPv6)로 먼저 풀리는데 dockerd는 IPv4에만 리슨 → **IPv4로 고정**)
 - Windows `docker.exe` 존재 확인 → 없으면 **winget으로 설치할지 질문**(거절 시 명령만 안내)
@@ -182,19 +189,23 @@ powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.peach-win\install-wi
 ### 동작 흐름
 
 ```
-로그인 → 작업 스케줄러 → start-wsl-docker.vbs → .cmd → wsl … true (WSL 깨움)
-       → systemd → dockerd(127.0.0.1:2375)
-Windows docker.exe/VSCode → DOCKER_HOST=tcp://127.0.0.1:2375 → (mirrored 공유 루프백) → WSL
+로그인 → 작업 스케줄러 'WSL Docker Portproxy' → refresh-docker-portproxy.ps1
+       → wsl … (WSL 깨움) + eth0 IP 재감지 → netsh portproxy 127.0.0.1:2375 → WSL eth0:2375
+       → systemd → dockerd(0.0.0.0:2375, eth0에서 수신)
+Windows docker.exe/VSCode → DOCKER_HOST=tcp://127.0.0.1:2375 → 포트프록시 → WSL eth0:2375
 ```
 
-> - `127.0.0.1`이 WSL에 안 닿으면 `%USERPROFILE%\.wslconfig` 에 `[wsl2]` / `networkingMode=mirrored` 추가.
-> - 옛 dockerd 시작 작업(예: `start-dockerd-in-wsl.bat`, `netsh portproxy`)이 있으면 **비활성화/삭제**합니다(systemd 설정과 충돌).
+> - **대안(mirrored):** `%USERPROFILE%\.wslconfig` 에 `[wsl2]` / `networkingMode=mirrored` 를 넣으면
+>   포트프록시 없이 localhost로 직접 붙습니다. 단 이땐 WSL 드롭인을 반드시 `127.0.0.1:2375`로
+>   되돌리세요(mirrored에서 `0.0.0.0`은 LAN 노출). Windows 11 22H2+ 필요.
+> - 옛 dockerd 시작 작업(예: `start-dockerd-in-wsl.bat`, 수동 `netsh portproxy`)이 있으면 **비활성화/삭제**합니다
+>   (systemd 설정과 충돌). `install-windows.ps1`은 레거시 작업(`WSL Docker Autostart`·`Start Docker Core`)을 자동 제거합니다.
 
 ### 재현성 (다른 PC / WSL 초기화)
 
 | 구성 | 위치 | 재현 방법 |
 |------|------|-----------|
-| 헬퍼 스크립트 4종 | 저장소 `docker-windows-tcp/` | `git clone`에 포함(별도 작업 없음) |
+| 헬퍼 스크립트(`install-windows.ps1`·`refresh-docker-portproxy.ps1`) | 저장소 `docker-windows-tcp/` | `git clone`에 포함(별도 작업 없음) |
 | Windows docker CLI | Windows | **2)** 설치기가 없으면 질문 후 설치 (또는 **0)** 수동) |
 | WSL drop-in | WSL ext4 | **1)** 재실행 |
 | Windows 작업·`DOCKER_HOST`·`.peach-win` | Windows | **2)** 재실행 |
