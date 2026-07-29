@@ -34,12 +34,16 @@ if (-not (Test-Path $refresh)) {
 }
 
 # 레거시 wake 작업 정리 — 이제 포트프록시 작업이 WSL을 깨우므로 불필요(중복 방지).
+# schtasks는 작업이 없으면 stderr로 에러를 뱉는다. ErrorActionPreference=Stop면 이게
+# NativeCommandError로 승격돼 스크립트가 죽으므로, 이 구간만 Continue로 낮추고 종료코드로 판정한다.
 foreach ($legacy in @("WSL Docker Autostart", "Start Docker Core")) {
-    schtasks /query /tn "$legacy" 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) {
-        schtasks /delete /tn "$legacy" /f | Out-Null
-        Write-Host "      레거시 작업 제거: $legacy"
-    }
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    schtasks /query /tn "$legacy" *>$null
+    $found = ($LASTEXITCODE -eq 0)
+    if ($found) { schtasks /delete /tn "$legacy" /f *>$null }
+    $ErrorActionPreference = $prevEap
+    if ($found) { Write-Host "      레거시 작업 제거: $legacy" }
 }
 
 # [1/5] 포트프록시 즉시 설정 (WSL 깨움 + eth0 IP 재감지 + netsh)
